@@ -26,6 +26,7 @@ DONE = "done"
 DELETED = "deleted"
 ALLOWED_STATES = [ACTIVE, OPEN, DONE, DELETED]
 WEEK_LIMIT = 10
+LASTNUM = "lastnum"
 
 RED_ON = "\033[38;5;9m"
 GREEN_ON = "\033[38;5;10m"
@@ -654,6 +655,32 @@ def do_projects(params):
              summaries[ii][ACTIVE] + summaries[ii][OPEN] + summaries[ii][DONE]
             ))
 
+    return
+
+def next_help():
+    return "return next unused sequence number (to use as a name)"
+
+def do_next(params):
+    lnumpath = os.path.join(dbs_repo(), LASTNUM)
+    if os.path.exists(lnumpath):
+        fd = open(lnumpath, "r")
+        data = fd.readline()
+        fd.close()
+    if len(data) > 1:
+        n = int(data.strip())
+    else:
+        n = 1
+    fd = open(lnumpath, "w")
+    fd.seek(0)
+    lnum = "%04d" % n
+
+    while task_name_exists(lnum):
+        n = n + 1
+        lnum = "%04d" % n
+
+    fd.write("%d\n" % n)
+    fd.close()
+    print("Next usable sequence number: %s" % lnum)
     return
 
 #-- main
