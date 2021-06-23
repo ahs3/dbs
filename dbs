@@ -7,6 +7,7 @@
 #
 
 import collections
+import datetime
 import os
 import os.path
 import re
@@ -105,7 +106,10 @@ class Task:
         return self.state
 
     def add_note(self, note):
-        self.notes.append(note)
+        today = datetime.date.today()
+        print(today.strftime("%Y-%m-%d"))
+        txt = "(" + today.strftime("%Y-%m-%d") + ") " + note
+        self.notes.append(txt)
 
     def get_notes(self):
         return self.notes
@@ -278,7 +282,7 @@ def do_init(params):
 
     return
 
-def list_tasks(state):
+def list_tasks(state, add_space=False):
     if state not in ALLOWED_STATES:
         print("? unknown task state requested")
         sys.exit(1)
@@ -295,6 +299,9 @@ def list_tasks(state):
         print("No %s tasks found." % state)
         return
 
+    if add_space:
+        print("")
+    print("%s tasks:" % state.capitalize())
     one_line_header()
     keys = tasks.keys()
     for pri in ['h', 'm', 'l']:
@@ -328,12 +335,9 @@ def LA_help():
     return "list ALL tasks in any state"
     
 def do_LA(params):
-    print('Active:')
     list_tasks(ACTIVE)
-    print('\nOpen:')
-    list_tasks(OPEN)
-    print('\nDone:')
-    list_tasks(DONE)
+    list_tasks(OPEN, add_space=True)
+    list_tasks(DONE, add_space=True)
     return
 
 def LD_help():
