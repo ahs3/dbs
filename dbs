@@ -1,0 +1,679 @@
+#!/usr/bin/env python3
+# Copyright (c) 2021, Al Stone <ahs3@ahs3.net>
+#
+#	dbs == dain-bread simple, a todo list for minimalists
+#
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import collections
+import os
+import os.path
+import re
+import sys
+import time
+
+#-- globals
+VERSION = "0.1"
+YEAR = "2021"
+AUTHOR = "Al Stone <ahs3@ahs3.net>"
+TASK_LIST = {}
+CONFIG = "dbsrc"
+ACTIVE = "active"
+OPEN = "open"
+DONE = "done"
+DELETED = "deleted"
+ALLOWED_STATES = [ACTIVE, OPEN, DONE, DELETED]
+WEEK_LIMIT = 10
+
+RED_ON = "\033[38;5;9m"
+GREEN_ON = "\033[38;5;10m"
+YELLOW_ON = "\033[38;5;11m"
+COLOR_OFF = "\033[0m"
+
+DO_PREFIX = re.compile('^do_')
+RE_TASK = re.compile('^Task:')
+RE_STATE = re.compile('^State:')
+RE_PROJECT = re.compile('^Project:')
+RE_PRIORITY = re.compile('^Priority:')
+RE_NOTE = re.compile('^Note:')
+
+#-- classes
+class Task:
+    def __init__(self):
+        self.name = ""
+        self.task = ""
+        self.project = ""
+        self.priority = "m"
+        self.state = "open"
+        self.notes = []
+
+    def populate(self, fname, name):
+        fd = open(fname, "r")
+        info = fd.readlines()
+        #print(info)
+        fd.close()
+
+        self.name = name
+        for ii in info:
+            line = ii.strip()
+            d = ' '.join(line.split(':')[1:])
+            if RE_TASK.search(line):
+                 self.task = d.strip()
+            elif RE_STATE.search(line):
+                 self.state = d.strip()
+            elif RE_PROJECT.search(line):
+                 self.project = d.strip()
+            elif RE_PRIORITY.search(line):
+                 self.priority = d.strip()
+            elif RE_NOTE.search(line):
+                 self.notes.append(d.strip())
+        return
+
+    def set_name(self, name):
+        self.name = name
+
+    def get_name(self):
+        return self.name
+
+    def set_task(self, task):
+        self.task = task
+
+    def get_task(self):
+        return self.task
+
+    def set_project(self, project):
+        self.project = project
+
+    def get_project(self):
+        return self.project
+
+    def set_priority(self, priority):
+        pri = priority.lower()
+        if pri in ['h', 'm', 'l']: 
+            self.priority = pri
+
+    def get_priority(self):
+        return self.priority
+
+    def set_state(self, state):
+        s = state.lower()
+        if s in ALLOWED_STATES:
+            self.state = s
+
+    def get_state(self):
+        return self.state
+
+    def add_note(self, note):
+        self.notes.append(note)
+
+    def get_notes(self):
+        return self.notes
+
+    def dump(self):
+        # for debug use
+        print("--- file name: %s" % 
+              os.path.join(dbs_repo(), self.state, self.name))
+        print("Task: %s" % self.task)
+        print("State: %s" % self.state)
+        print("Project: %s" % self.project)
+        print("Priority: %s" % self.priority)
+        if len(self.notes) > 0:
+            for ii in self.notes:
+                print("Note: %s" % ii)
+        return
+
+    def print(self):
+        print("%s--- file:%s %s" % (GREEN_ON, COLOR_OFF,
+              os.path.join(dbs_repo(), self.state, self.name)))
+        print("    %sTask:%s %s" % (GREEN_ON, COLOR_OFF, self.task))
+        print("   %sState:%s %s" % (GREEN_ON, COLOR_OFF, self.state))
+        print(" %sProject:%s %s" % (GREEN_ON, COLOR_OFF, self.project))
+        print("%sPriority:%s %s" % (GREEN_ON, COLOR_OFF, self.priority))
+        if len(self.notes) > 0:
+            for ii in self.notes:
+                print("    %sNote:%s %s" % (GREEN_ON, COLOR_OFF, ii))
+        return
+
+    def one_line(self):
+        if self.priority == 'h':
+            color = RED_ON
+        elif self.priority == 'm':
+            color = GREEN_ON
+        else:
+            color = ''
+        print("%s%-8s    %1s    %-8s  %s%s" % (color, self.name[0:7],
+	      self.priority, self.project, self.task, COLOR_OFF))
+        return
+
+    def write(self, overwrite=False):
+        fname = os.path.join(dbs_repo(), self.state, self.name)
+        if not overwrite and os.path.isfile(fname):
+            print("? task %s already exists" % self.name)
+            sys.exit(1)
+        fd = open(fname, "w")
+        fd.write("Task: %s\n" % self.task)
+        fd.write("State: %s\n" % self.state)
+        fd.write("Project: %s\n" % self.project)
+        fd.write("Priority: %s\n" % self.priority)
+        if len(self.notes) > 0:
+            for ii in self.notes:
+                fd.write("Note: %s\n" % ii)
+        fd.close()
+        return
+
+    def move(self, new_state):
+        if new_state not in ALLOWED_STATES:
+            print("? \"%s\" is not an allowed state" % new_state)
+            sys.exit(1)
+        fname = os.path.join(dbs_repo(), new_state, self.name)
+        if os.path.isfile(fname):
+            print("? task %s already exists" % self.name)
+            sys.exit(1)
+        fd = open(fname, "w")
+        fd.write("Task: %s\n" % self.task)
+        fd.write("State: %s\n" % new_state)
+        fd.write("State: %s\n" % self.state)
+        fd.write("Project: %s\n" % self.project)
+        fd.write("Priority: %s\n" % self.priority)
+        if len(self.notes) > 0:
+            for ii in self.notes:
+                fd.write("Note: %s\n" % ii)
+        fd.close()
+        return
+
+#-- helper functions
+def usage():
+    print("usage: dbs <command> [<parameters>]")
+    print("   defined commands:")
+    cmdlist = []
+    for ii in globals().keys():
+        if DO_PREFIX.search(str(ii)):
+            cmd = ii.replace('do_', '')
+            cmdlist.append(cmd)
+
+    for ii in sorted(cmdlist):
+        print("      %s\t=> %s" % (ii, globals()[ii + "_help"]()))
+
+    return
+
+def dbs_repo():
+    return os.path.join(os.getenv("HOME"), ".dbs")
+
+def dbs_config_name():
+    return os.path.join(dbs_repo(), CONFIG)
+
+def dbs_open_name():
+    return os.path.join(dbs_repo(), OPEN)
+
+def dbs_done_name():
+    return os.path.join(dbs_repo(), DONE)
+
+def dbs_active_name():
+    return os.path.join(dbs_repo(), ACTIVE)
+
+def dbs_deleted_name():
+    return os.path.join(dbs_repo(), DELETED)
+
+def dbs_data_dirs_exist():
+    if os.path.isdir(dbs_open_name()) and os.path.isdir(dbs_done_name()) and \
+       os.path.isdir(dbs_active_name()) and os.path.isdir(dbs_deleted_name()):
+        return True
+    return False
+
+def dbs_defconfig():
+    fname = dbs_config_name()
+    fd = open(fname, "w")
+    fd.write("# default config file for dbs\n")
+    fd.write("repo: %s\n" % dbs_repo())
+    fd.close()
+    return
+
+def dbs_make_data_dirs():
+    if not os.path.isdir(dbs_open_name()):
+        os.mkdir(dbs_open_name())
+    if not os.path.isdir(dbs_done_name()):
+        os.mkdir(dbs_done_name())
+    if not os.path.isdir(dbs_active_name()):
+        os.mkdir(dbs_active_name())
+    if not os.path.isdir(dbs_deleted_name()):
+        os.mkdir(dbs_deleted_name())
+    return
+
+def dbs_make_repo():
+    print("dbs repo not found, creating defaults in %s" % dbs_repo())
+    os.mkdir(dbs_repo())
+    dbs_make_data_dirs()
+    dbs_defconfig()
+    return
+
+def one_line_header():
+    print("-Name---  -Pri-  -Proj---  -Task---------------------------------")
+    return
+
+def task_name_exists(name):
+    if not name:
+        return None
+
+    for state in [ACTIVE, OPEN, DONE, DELETED]:
+        fullpath = os.path.join(dbs_repo(), state)
+        for (dirpath, dirnames, filenames) in os.walk(fullpath):
+            if name in filenames:
+                return os.path.join(dbs_repo(), state, name)
+    return None
+
+#-- command functions
+def init_help():
+    return "create initial dbs repository for tasks"
+
+def do_init(params):
+    if not os.path.isdir(dbs_repo()):
+        dbs_make_repo()
+    
+    if not os.path.isfile(dbs_config_name()):
+        dbs_defconfig()
+    
+    if not dbs_data_dirs_exist():
+        dbs_make_data_dirs()
+
+    return
+
+def list_tasks(state):
+    if state not in ALLOWED_STATES:
+        print("? unknown task state requested")
+        sys.exit(1)
+
+    fullpath = os.path.join(dbs_repo(), state)
+    tasks = {}
+    for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	for ii in filenames:
+           t = Task()
+           t.populate(os.path.join(fullpath, ii), ii)
+           tasks[ii] = t
+
+    if len(tasks) < 1:
+        print("No %s tasks found." % state)
+        return
+
+    one_line_header()
+    keys = tasks.keys()
+    for pri in ['h', 'm', 'l']:
+        for ii in sorted(keys):
+           if tasks[ii].get_priority() == pri:
+                tasks[ii].one_line()
+    return
+
+def la_help():
+    return "list active tasks"
+    
+def do_la(params):
+    list_tasks(ACTIVE)
+    return
+
+def lo_help():
+    return "list open tasks"
+    
+def do_lo(params):
+    list_tasks(OPEN)
+    return
+
+def ld_help():
+    return "list tasks done"
+    
+def do_ld(params):
+    list_tasks(DONE)
+    return
+
+def LA_help():
+    return "list ALL tasks in any state"
+    
+def do_LA(params):
+    print('Active:')
+    list_tasks(ACTIVE)
+    print('\nOpen:')
+    list_tasks(OPEN)
+    print('\nDone:')
+    list_tasks(DONE)
+    return
+
+def LD_help():
+    return "list deleted tasks"
+    
+def do_LD(params):
+    list_tasks(DELETED)
+    return
+
+def add_help():
+    return "add open task: <name> <project> <priority> <description>"
+    
+def do_add(params):
+    task = Task()
+    if len(params) < 4:
+        print("? %s" % add_help())
+        p = ' '.join(params)
+        p.replace('[','')
+        p.replace(']','')
+        p.replace('.','')
+        print("  got: %s" % p)
+        return
+
+    if task_name_exists(params[0]):
+        print("? a task by that name (\"%s\") already exists" % params[0])
+        sys.exit(1)
+
+    task.set_name(params[0])
+    task.set_project(params[1])
+    task.set_priority(params[2])
+    task.set_task(params[3])
+    task.set_state(OPEN)
+
+    task.dump()
+    task.write()
+
+    return
+
+def log_help():
+    return "log done task: <name> <project> <priority> <description>"
+    
+def do_log(params):
+    task = Task()
+    if len(params) < 4:
+        print("? %s" % log_help())
+        p = ' '.join(params)
+        p.replace('[','')
+        p.replace(']','')
+        p.replace('.','')
+        print("  got: %s" % p)
+        return
+
+    if task_name_exists(params[0]):
+        print("? a task by that name (\"%s\") already exists" % params[0])
+        sys.exit(1)
+
+    task.set_name(params[0])
+    task.set_project(params[1])
+    task.set_priority(params[2])
+    task.set_task(params[3])
+    task.set_state(DONE)
+
+    task.dump()
+    task.write()
+
+    return
+
+def help_help():
+    return "print this list"
+    
+def do_help(params):
+    usage()
+    return
+
+def version_help():
+    return "print the current version of dbs"
+    
+def do_version(params):
+    print("dbs, v%s -- the dain-bread simple TODO list" % VERSION)
+    print("Copyright (c) %s, %s" % (YEAR, AUTHOR))
+    return
+
+def show_help():
+    return "print out a single task: <name>"
+    
+def do_show(params):
+    fullpath = task_name_exists(params[0])
+    if not fullpath:
+        print("? task \"%s\" is not defined" % params[0])
+        sys.exit(1)
+
+    t = Task()
+    t.populate(fullpath, params[0])
+    t.print()
+    return
+
+def done_help():
+    return "mark a task done: <name>"
+    
+def do_done(params):
+    fullpath = task_name_exists(params[0])
+    if not fullpath:
+        print("? task \"%s\" is not defined" % params[0])
+        sys.exit(1)
+
+    t = Task()
+    t.populate(fullpath, params[0])
+    t.set_state(DONE)
+    t.move(DONE)
+    t.print()
+    os.remove(fullpath)
+    return
+
+def active_help():
+    return "mark a task active: <name>"
+    
+def do_active(params):
+    fullpath = task_name_exists(params[0])
+    if not fullpath:
+        print("? task \"%s\" is not defined" % params[0])
+        sys.exit(1)
+
+    t = Task()
+    t.populate(fullpath, params[0])
+    t.set_state(ACTIVE)
+    t.move(ACTIVE)
+    t.print()
+    os.remove(fullpath)
+    return
+
+def delete_help():
+    return "delete a task: <name>"
+    
+def do_delete(params):
+    fullpath = task_name_exists(params[0])
+    if not fullpath:
+        print("? task \"%s\" is not defined" % params[0])
+        sys.exit(1)
+
+    t = Task()
+    t.populate(fullpath, params[0])
+    t.set_state(DELETED)
+    t.move(DELETED)
+    t.print()
+    os.remove(fullpath)
+    return
+
+def note_help():
+    return "add a note to a task: <name> <note>"
+    
+def do_note(params):
+    if len(params) < 2:
+        print("? expected -- %s" % note_help())
+        print("  got: %s" % ' '.join(params))
+        sys.exit(1)
+
+    fullpath = task_name_exists(params[0])
+    if not fullpath:
+        print("? task \"%s\" is not defined" % params[0])
+        sys.exit(1)
+
+    t = Task()
+    t.populate(fullpath, params[0])
+    t.add_note(' '.join(params[1:]))
+    t.write(overwrite=True)
+
+    return
+
+def recap_help():
+    return "list all tasks done in <n> weeks: <n>"
+    
+def do_recap(params):
+    weeks = 1
+    if len(params) >= 1:
+        if params[0].isnumeric():
+            weeks = int(params[0])
+        else:
+            print("? need a numeric value for number of weeks")
+            sys.exit(1)
+
+    if weeks > WEEK_LIMIT:
+        print("? no, you really don't want more than %d weeks worth." %
+              int(weeks))
+        sys.exit(1)
+
+    current_time = time.time()
+    elapsed_time = (weeks * 7) * 3600 * 24
+
+    fullpath = os.path.join(dbs_repo(), DONE)
+    tasks = {}
+    for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	for ii in filenames:
+           file_time = os.path.getmtime(os.path.join(fullpath, ii))
+
+           if current_time - file_time < elapsed_time:
+               t = Task()
+               t.populate(os.path.join(fullpath, ii), ii)
+               tasks[ii] = t
+
+    if len(tasks) < 1:
+        print("No %s tasks found." % DONE)
+        return
+
+    if weeks == 1:
+       print("During the last week:")
+    else:
+       print("During the last %d weeks:" % weeks)
+    one_line_header()
+    keys = tasks.keys()
+    for pri in ['h', 'm', 'l']:
+        for ii in sorted(keys):
+           if tasks[ii].get_priority() == pri:
+                tasks[ii].one_line()
+    return
+
+def lp_help():
+    return "list open tasks for a project: <project>"
+    
+def do_lp(params):
+    if len(params) < 1:
+        print("? project name is required")
+        sys.exit(1)
+
+    project = params[0]
+
+    tasks = {}
+    fullpath = os.path.join(dbs_repo(), ACTIVE)
+    for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	for ii in filenames:
+           t = Task()
+           t.populate(os.path.join(fullpath, ii), ii)
+           if t.get_project() == project:
+               tasks[ii] = t
+
+    if len(tasks) < 1:
+        print("No active tasks found for project %s." % project)
+    else:
+        print("Active tasks for project %s:" % project)
+        one_line_header()
+        keys = tasks.keys()
+        for pri in ['h', 'm', 'l']:
+            for ii in sorted(keys):
+               if tasks[ii].get_priority() == pri:
+                    tasks[ii].one_line()
+
+    tasks = {}
+    fullpath = os.path.join(dbs_repo(), OPEN)
+    for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	for ii in filenames:
+           t = Task()
+           t.populate(os.path.join(fullpath, ii), ii)
+           if t.get_project() == project:
+               tasks[ii] = t
+
+    if len(tasks) < 1:
+        print("No open tasks found for project %s." % project)
+    else:
+        print("")
+        print("Open tasks for project %s:" % project)
+        one_line_header()
+        keys = tasks.keys()
+        for pri in ['h', 'm', 'l']:
+            for ii in sorted(keys):
+               if tasks[ii].get_priority() == pri:
+                    tasks[ii].one_line()
+
+    return
+
+def projects_help():
+    return "print project task summaries"
+    
+def do_projects(params):
+    summaries = {}
+    tasks = {}
+
+    for state in ALLOWED_STATES:
+        if state == DELETED:
+            continue
+        fullpath = os.path.join(dbs_repo(), state)
+        for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	    for ii in filenames:
+               t = Task()
+               t.populate(os.path.join(fullpath, ii), ii)
+               proj = t.get_project()
+               pri = t.get_priority()
+               state = t.get_state()
+               if proj not in summaries:
+                   summaries[proj] = { 'h':0, 'm':0, 'l':0, \
+                                       ACTIVE:0, OPEN:0, DONE:0 }
+               summaries[proj][pri] += 1
+               summaries[proj][state] += 1
+               tasks[ii] = t
+
+    if len(tasks) < 1:
+        print("No projects and no summaries.")
+        return
+
+    print("Summary by priority:")
+    print("-Name---  --H- --M- --L-  --Total--")
+    for ii in sorted(summaries.keys()):
+        print("%s%-8s%s  %3d  %3d  %3d   %5d" %
+              (GREEN_ON, ii, COLOR_OFF,
+               summaries[ii]['h'], summaries[ii]['m'], summaries[ii]['l'],
+               summaries[ii]['h'] + summaries[ii]['m'] + summaries[ii]['l']
+              ))
+
+    print("")
+    print("Summary by state:")
+    print("-Name---  -Active- -Open- -Closed-  --Total--")
+    for ii in sorted(summaries.keys()):
+        print("%s%-8s%s    %3d     %3d     %3d      %5d" %
+            (GREEN_ON, ii, COLOR_OFF,
+             summaries[ii][ACTIVE], summaries[ii][OPEN], summaries[ii][DONE],
+             summaries[ii][ACTIVE] + summaries[ii][OPEN] + summaries[ii][DONE]
+            ))
+
+    return
+
+#-- main
+def main():
+    if len(sys.argv) < 2:
+        usage()
+        sys.exit(0)
+    else:
+        params = ''
+        if len(sys.argv) > 2:
+            params = sys.argv[2:]
+        cmd = 'do_' + sys.argv[1]
+
+        if cmd not in globals():
+            print("? no such command: %s" % sys.argv[1])
+            sys.exit(1)
+
+        if cmd != "do_init":
+            do_init(params)
+
+        globals()[cmd](params)
+
+    return
+
+#-- link to main
+if __name__ == "__main__":
+    main()
