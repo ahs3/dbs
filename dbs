@@ -367,8 +367,8 @@ def do_add(params):
     task.set_task(params[3])
     task.set_state(OPEN)
 
-    task.dump()
     task.write()
+    task.print()
 
     return
 
