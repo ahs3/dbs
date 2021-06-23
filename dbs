@@ -59,15 +59,15 @@ class Task:
             line = ii.strip()
             d = ' '.join(line.split(':')[1:])
             if RE_TASK.search(line):
-                 self.task = d.strip()
+                 self.task = line.replace('Task:','').strip()
             elif RE_STATE.search(line):
-                 self.state = d.strip()
+                 self.state = line.replace('State:','').strip()
             elif RE_PROJECT.search(line):
-                 self.project = d.strip()
+                 self.project = line.replace('Project:','').strip()
             elif RE_PRIORITY.search(line):
-                 self.priority = d.strip()
+                 self.priority = line.replace('Priority:','').strip()
             elif RE_NOTE.search(line):
-                 self.notes.append(d.strip())
+                 self.notes.append(line.replace('Note:','').strip())
         return
 
     def set_name(self, name):
@@ -364,7 +364,7 @@ def do_add(params):
     task.set_name(params[0])
     task.set_project(params[1])
     task.set_priority(params[2])
-    task.set_task(params[3])
+    task.set_task(' '.join(params[3:]))
     task.set_state(OPEN)
 
     task.write()
@@ -393,7 +393,7 @@ def do_log(params):
     task.set_name(params[0])
     task.set_project(params[1])
     task.set_priority(params[2])
-    task.set_task(params[3])
+    task.set_task(' '.join(params[3:]))
     task.set_state(DONE)
 
     task.dump()
