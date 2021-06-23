@@ -1,0 +1,68 @@
+dbs == dain-bread simple
+========================
+TODO list for minimalists
+
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (c) 2021, Al Stone <ahs3@ahs3.net>
+
+A "task" consists of a file that looks like this:
+
+    Task: get something done
+    State: open
+    Project: stuff
+    Priority: h
+    Note: this is a note
+    Note: this is another note
+
+(sans indenting, of course).  Each key:value is exactly one line (everything
+up until the newline).  There are a few limits:
+
+   -- State is one of 'open', 'active', 'done' or 'deleted' [0]
+   -- Priority is one of 'h', 'm', 'l'
+
+It's all pretty self-explanatory.  It is intentionally one Python script
+to try to keep things simple (I dislike really large files of source code).
+
+Installation is simple: clone the source tree, cd to the clone, then:
+
+   $ sudo cp dbs /usr/local/bin
+
+Or:
+
+   $ cp dbs ~/bin
+
+That's it [2].  Python3 is the only requirement.  Most distros will have 
+the right Python modules by default.  I use this on Fedora and Debian, so
+your mileage may vary.
+
+To add a task like the one above:
+
+   $ dbs add 0001 stuff h "get something done"
+
+That's it.  It's automatically created as an open task.  You can find all
+open tasks with:
+
+   $ dbs lo
+
+('lo' == 'list open' -- extra credit if you can figure out the command for
+'list active' and 'list done').
+
+If you do this:
+
+   $ dbs
+
+You'll get a list of all current commands and any parameters they might need.
+
+A directory called (cleverly) ~/.dbs will be created.  There is a dbsrc config
+file in there that's not really used yet.  There is a directory for each task
+state containing one file for each task in that state.  Task names must be
+unique across all states since we move the files around in the various ~/.dbs
+directories [1].
+
+
+Notes:
+[0] Nothing ever gets actually deleted unless you remove the files.
+[1] In order to sync across machines, I create ~/Dropbox/dbs and then
+    symlink: ln -s ~/Dropbox/dbs ~/.dbs.
+[2] You could rename the script if you like; I don't think there's anything
+    in the script that would preclude it.
