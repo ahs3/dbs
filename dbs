@@ -17,7 +17,7 @@ import sys
 import time
 
 #-- globals
-VERSION = "0.2"
+VERSION = "0.3"
 YEAR = "2021"
 AUTHOR = "Al Stone <ahs3@ahs3.net>"
 TASK_LIST = {}
