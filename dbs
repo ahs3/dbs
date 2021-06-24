@@ -735,6 +735,43 @@ def do_projects(params):
 
     return
 
+def num_help():
+    return "print project task counts"
+    
+def do_num(params):
+    summaries = {}
+    tasks = {}
+
+    for state in ALLOWED_STATES:
+        if state == DELETED:
+            continue
+        fullpath = os.path.join(dbs_repo(), state)
+        for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	    for ii in filenames:
+               t = Task()
+               t.populate(os.path.join(fullpath, ii), ii)
+               proj = t.get_project()
+               pri = t.get_priority()
+               state = t.get_state()
+               if proj not in summaries:
+                   summaries[proj] = 0
+               summaries[proj] += 1
+               tasks[ii] = t
+
+    if len(tasks) < 1:
+        print("No projects found.")
+        return
+
+    print("Task counts by project:")
+    print("-Name---  --Total--")
+    total = 0
+    for ii in sorted(summaries.keys()):
+        total += summaries[ii]
+        print("%s%-8s%s   %5d" % (GREEN_ON, ii, COLOR_OFF, summaries[ii]))
+
+    print_tasks_found(total)
+    return
+
 def next_help():
     return "return next unused sequence number (to use as a name)"
 
