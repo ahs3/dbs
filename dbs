@@ -672,6 +672,7 @@ def do_lp(params):
 
     if len(tasks) < 1:
         print("No open tasks found for project %s." % project)
+        return
     else:
         print("")
         print("Open tasks for project %s:" % project)
