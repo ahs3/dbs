@@ -11,6 +11,7 @@ import datetime
 import os
 import os.path
 import re
+import shutil
 import sys
 import time
 
@@ -146,8 +147,9 @@ class Task:
             color = GREEN_ON
         else:
             color = ''
+        info = fix_task(self.task)
         print("%s%-8s    %1s    %-8s  %s%s" % (color, self.name[0:7],
-	      self.priority, self.project, self.task, COLOR_OFF))
+	      self.priority, self.project, info, COLOR_OFF))
         return
 
     def write(self, overwrite=False):
@@ -200,6 +202,31 @@ def usage():
         print("      %s\t=> %s" % (ii, globals()[ii + "_help"]()))
 
     return
+
+def fix_task(info):
+    # munge up the task string if it's longer than one line
+    # NB: all the lengths and stuff are figured out by hand
+    prefix_len = 25
+    cnt = len(info)
+    termsize = shutil.get_terminal_size()
+    avail = termsize.columns - prefix_len
+    last = 0
+    res = ''
+    while cnt > 0:
+        if cnt <= avail:
+           res += info[last:]
+           break
+        else:
+           t1 = info[last:last + avail]
+           ii = t1.rfind(' ')
+           t2 = info[last:last + ii]
+           res += t2
+           last = ii + 1
+           cnt -= ii
+           if cnt > 0:
+               res += '\n' + "                           "
+
+    return res
 
 def dbs_repo():
     return os.path.join(os.getenv("HOME"), ".dbs")
