@@ -16,7 +16,7 @@ import sys
 import time
 
 #-- globals
-VERSION = "0.1"
+VERSION = "0.2"
 YEAR = "2021"
 AUTHOR = "Al Stone <ahs3@ahs3.net>"
 TASK_LIST = {}
@@ -318,6 +318,7 @@ def list_tasks(state, add_space=False):
 
     fullpath = os.path.join(dbs_repo(), state)
     tasks = {}
+    task_cnt = 0
     for (dirpath, dirnames, filenames) in os.walk(fullpath):
     	for ii in filenames:
            t = Task()
@@ -327,6 +328,7 @@ def list_tasks(state, add_space=False):
     if len(tasks) < 1:
         print("No %s tasks found." % state)
         return
+    task_cnt += len(tasks)
 
     if add_space:
         print("")
@@ -337,6 +339,8 @@ def list_tasks(state, add_space=False):
         for ii in sorted(keys):
            if tasks[ii].get_priority() == pri:
                 tasks[ii].one_line()
+
+    print_tasks_found(task_cnt)
     return
 
 def la_help():
@@ -586,12 +590,22 @@ def do_recap(params):
 def lp_help():
     return "list open tasks for a project: <project>"
     
+def print_tasks_found(count, space=True):
+    suffix = ''
+    if count > 1:
+        suffix = 's'
+    if space:
+        print("")
+    print("%d task%s found." % (count, suffix))
+    return
+
 def do_lp(params):
     if len(params) < 1:
         print("? project name is required")
         sys.exit(1)
 
     project = params[0]
+    task_cnt = 0
 
     tasks = {}
     fullpath = os.path.join(dbs_repo(), ACTIVE)
@@ -612,6 +626,7 @@ def do_lp(params):
             for ii in sorted(keys):
                if tasks[ii].get_priority() == pri:
                     tasks[ii].one_line()
+        task_cnt += len(tasks)
 
     tasks = {}
     fullpath = os.path.join(dbs_repo(), OPEN)
@@ -633,7 +648,9 @@ def do_lp(params):
             for ii in sorted(keys):
                if tasks[ii].get_priority() == pri:
                     tasks[ii].one_line()
+        task_cnt += len(tasks)
 
+    print_tasks_found(task_cnt)
     return
 
 def projects_help():
