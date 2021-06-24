@@ -682,6 +682,14 @@ def do_projects(params):
              summaries[ii][ACTIVE] + summaries[ii][OPEN] + summaries[ii][DONE]
             ))
 
+    print("")
+    if len(summaries.keys()) > 1:
+        ssuffix = 's'
+    if len(tasks) > 1:
+        tsuffix = 's'
+    print("%d project%s with %d task%s" % (len(summaries.keys()), ssuffix,
+          len(tasks), tsuffix))
+
     return
 
 def next_help():
