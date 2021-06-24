@@ -147,7 +147,12 @@ class Task:
             color = GREEN_ON
         else:
             color = ''
-        info = fix_task(self.task)
+
+        note_cnt = len(self.notes)
+        nnotes = ''
+        if note_cnt > 0:
+            nnotes = " [%d]" % note_cnt
+        info = fix_task(self.task) + nnotes
         print("%s%-8s    %1s    %-8s  %s%s" % (color, self.name[0:7],
 	      self.priority, self.project, info, COLOR_OFF))
         return
