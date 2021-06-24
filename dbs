@@ -10,6 +10,7 @@ import collections
 import datetime
 import os
 import os.path
+import pathlib
 import re
 import shutil
 import sys
@@ -461,6 +462,20 @@ def do_version(params):
 def show_help():
     return "print out a single task: <name>"
     
+def get_last_modified_time(fullpath):
+    fname = pathlib.Path(fullpath)
+    stat = fname.stat()
+    mtime = datetime.datetime.fromtimestamp(stat.st_mtime)
+    mstr = mtime.strftime("%Y-%m-%d %H:%M:%S")
+
+    tzS, tzD = time.tzname
+    if time.daylight:
+        tz = " " + tzD
+    else:
+        tz = " " + tzS
+
+    return mstr + tz
+
 def do_show(params):
     fullpath = task_name_exists(params[0])
     if not fullpath:
@@ -470,6 +485,10 @@ def do_show(params):
     t = Task()
     t.populate(fullpath, params[0])
     t.print()
+
+    print("")
+    mtime = get_last_modified_time(fullpath)
+    print("%sLast Modified:%s %s" % (GREEN_ON, COLOR_OFF, mtime))
     return
 
 def done_help():
