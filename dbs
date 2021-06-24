@@ -108,7 +108,6 @@ class Task:
 
     def add_note(self, note):
         today = datetime.date.today()
-        print(today.strftime("%Y-%m-%d"))
         txt = "(" + today.strftime("%Y-%m-%d") + ") " + note
         self.notes.append(txt)
 
@@ -504,6 +503,7 @@ def do_note(params):
     t.populate(fullpath, params[0])
     t.add_note(' '.join(params[1:]))
     t.write(overwrite=True)
+    t.print()
 
     return
 
