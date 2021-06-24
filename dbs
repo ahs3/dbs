@@ -614,6 +614,15 @@ def do_recap(params):
 def lp_help():
     return "list open tasks for a project: <project>"
     
+def print_projects_found(count, space=True):
+    suffix = ''
+    if count > 1:
+        suffix = 's'
+    if space:
+        print("")
+    print("%d project%s found." % (count, suffix))
+    return
+
 def print_tasks_found(count, space=True):
     suffix = ''
     if count > 1:
@@ -769,7 +778,8 @@ def do_num(params):
         total += summaries[ii]
         print("%s%-8s%s   %5d" % (GREEN_ON, ii, COLOR_OFF, summaries[ii]))
 
-    print_tasks_found(total)
+    print_projects_found(len(summaries))
+    print_tasks_found(total, False)
     return
 
 def next_help():
