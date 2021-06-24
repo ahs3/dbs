@@ -600,9 +600,9 @@ def do_recap(params):
         return
 
     if weeks == 1:
-       print("During the last week:")
+       print("Done during the last week:")
     else:
-       print("During the last %d weeks:" % weeks)
+       print("Done during the last %d weeks:" % weeks)
     one_line_header()
     keys = tasks.keys()
     for pri in ['h', 'm', 'l']:
