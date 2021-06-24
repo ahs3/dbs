@@ -206,13 +206,15 @@ def usage():
 def fix_task(info):
     # munge up the task string if it's longer than one line
     # NB: all the lengths and stuff are figured out by hand
-    prefix_len = 25
+    prefix_len = 27
     cnt = len(info)
     termsize = shutil.get_terminal_size()
     avail = termsize.columns - prefix_len
     last = 0
     res = ''
     while cnt > 0:
+        #print('[a]', last, cnt, avail)
+        #print('[a]', res)
         if cnt <= avail:
            res += info[last:]
            break
