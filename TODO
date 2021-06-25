@@ -5,8 +5,6 @@ TODO:
    i need 'em.
 -- add an edit command?
 -- use a pager?
--- command to duplicate a task?
-      dbs dup <from> <to>
 -- all commands that could operate on more than one task should be able to
 -- convert functions to use get_task()/put_task()
 
@@ -17,3 +15,5 @@ v0.3:
 -- command to raise/lower priority
       dbs up <name> ...
       dbs down <name> ...
+-- command to duplicate a task
+      dbs dup <from> <to>

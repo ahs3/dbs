@@ -350,8 +350,8 @@ def print_tasks_found(count, space=True):
     print("%d task%s found." % (count, suffix))
     return
 
-def put_task(task):
-    task.write(overwrite=True)
+def put_task(task, overwrite=True):
+    task.write(overwrite=overwrite)
     return
 
 def task_name_exists(name):
@@ -502,9 +502,27 @@ def do_down(params):
 
     return
 
-def version_help():
-    return "print the current version of dbs"
+def dup_help():
+    return "duplicate a task: <old-name> <new-name>"
     
+def do_dup(params):
+    if len(params) < 2:
+        print("? must provide old and new task names")
+        sys.exit(1)
+    
+    oldtask = params[0]
+    newtask = params[1]
+
+    tnew = get_task(oldtask)
+    if not tnew:        # the original to be copied does not exist
+        return
+
+    tnew.set_name(newtask)
+    tnew.add_note("duplicate of %s" % oldtask)
+    put_task(tnew, overwrite=False)
+
+    return
+
 def help_help():
     return "print this list"
     
