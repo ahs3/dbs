@@ -272,50 +272,19 @@ def fix_task(info):
 
     return res
 
-def one_line_header():
-    print("-Name---  -Pri-  -Proj---  -Task---------------------------------")
-    return
+def get_last_modified_time(fullpath):
+    fname = pathlib.Path(fullpath)
+    stat = fname.stat()
+    mtime = datetime.datetime.fromtimestamp(stat.st_mtime)
+    mstr = mtime.strftime("%Y-%m-%d %H:%M:%S")
 
-def task_name_exists(name):
-    if not name:
-        return None
+    tzS, tzD = time.tzname
+    if time.daylight:
+        tz = " " + tzD
+    else:
+        tz = " " + tzS
 
-    for state in [ACTIVE, OPEN, DONE, DELETED]:
-        fullpath = os.path.join(dbs_repo(), state)
-        for (dirpath, dirnames, filenames) in os.walk(fullpath):
-            if name in filenames:
-                return os.path.join(dbs_repo(), state, name)
-    return None
-
-def usage():
-    print("usage: dbs <command> [<parameters>]")
-    print("   defined commands:")
-    cmdlist = []
-    for ii in globals().keys():
-        if DO_PREFIX.search(str(ii)):
-            cmd = ii.replace('do_', '')
-            cmdlist.append(cmd)
-
-    for ii in sorted(cmdlist):
-        print("      %s\t=> %s" % (ii, globals()[ii + "_help"]()))
-
-    return
-
-#-- command functions
-def init_help():
-    return "create initial dbs repository for tasks"
-
-def do_init(params):
-    if not os.path.isdir(dbs_repo()):
-        dbs_make_repo()
-    
-    if not os.path.isfile(dbs_config_name()):
-        dbs_defconfig()
-    
-    if not dbs_data_dirs_exist():
-        dbs_make_data_dirs()
-
-    return
+    return mstr + tz
 
 def list_tasks(state, add_space=False):
     if state not in ALLOWED_STATES:
@@ -349,27 +318,54 @@ def list_tasks(state, add_space=False):
     print_tasks_found(task_cnt)
     return
 
-def la_help():
-    return "list active tasks"
-    
-def do_la(params):
-    list_tasks(ACTIVE)
+def one_line_header():
+    print("-Name---  -Pri-  -Proj---  -Task---------------------------------")
     return
 
-def lo_help():
-    return "list open tasks"
-    
-def do_lo(params):
-    list_tasks(OPEN)
+def print_projects_found(count, space=True):
+    suffix = ''
+    if count > 1:
+        suffix = 's'
+    if space:
+        print("")
+    print("%d project%s found." % (count, suffix))
     return
 
-def ld_help():
-    return "list tasks done"
-    
-def do_ld(params):
-    list_tasks(DONE)
+def print_tasks_found(count, space=True):
+    suffix = ''
+    if count > 1:
+        suffix = 's'
+    if space:
+        print("")
+    print("%d task%s found." % (count, suffix))
     return
 
+def task_name_exists(name):
+    if not name:
+        return None
+
+    for state in [ACTIVE, OPEN, DONE, DELETED]:
+        fullpath = os.path.join(dbs_repo(), state)
+        for (dirpath, dirnames, filenames) in os.walk(fullpath):
+            if name in filenames:
+                return os.path.join(dbs_repo(), state, name)
+    return None
+
+def usage():
+    print("usage: dbs <command> [<parameters>]")
+    print("   defined commands:")
+    cmdlist = []
+    for ii in globals().keys():
+        if DO_PREFIX.search(str(ii)):
+            cmd = ii.replace('do_', '')
+            cmdlist.append(cmd)
+
+    for ii in sorted(cmdlist):
+        print("      %s\t=> %s" % (ii, globals()[ii + "_help"]()))
+
+    return
+
+#-- command functions
 def LA_help():
     return "list ALL tasks in any state"
     
@@ -384,6 +380,23 @@ def LD_help():
     
 def do_LD(params):
     list_tasks(DELETED)
+    return
+
+def active_help():
+    return "mark a task active: <name>"
+    
+def do_active(params):
+    fullpath = task_name_exists(params[0])
+    if not fullpath:
+        print("? task \"%s\" is not defined" % params[0])
+        sys.exit(1)
+
+    t = Task()
+    t.populate(fullpath, params[0])
+    t.set_state(ACTIVE)
+    t.move(ACTIVE)
+    t.print()
+    os.remove(fullpath)
     return
 
 def add_help():
@@ -415,6 +428,83 @@ def do_add(params):
 
     return
 
+def delete_help():
+    return "delete a task: <name>"
+    
+def do_delete(params):
+    fullpath = task_name_exists(params[0])
+    if not fullpath:
+        print("? task \"%s\" is not defined" % params[0])
+        sys.exit(1)
+
+    t = Task()
+    t.populate(fullpath, params[0])
+    t.set_state(DELETED)
+    t.move(DELETED)
+    t.print()
+    os.remove(fullpath)
+    return
+
+def done_help():
+    return "mark a task done: <name>"
+    
+def do_done(params):
+    fullpath = task_name_exists(params[0])
+    if not fullpath:
+        print("? task \"%s\" is not defined" % params[0])
+        sys.exit(1)
+
+    t = Task()
+    t.populate(fullpath, params[0])
+    t.set_state(DONE)
+    t.move(DONE)
+    t.print()
+    os.remove(fullpath)
+    return
+
+def help_help():
+    return "print this list"
+    
+def do_help(params):
+    usage()
+    return
+
+def init_help():
+    return "create initial dbs repository for tasks"
+
+def do_init(params):
+    if not os.path.isdir(dbs_repo()):
+        dbs_make_repo()
+    
+    if not os.path.isfile(dbs_config_name()):
+        dbs_defconfig()
+    
+    if not dbs_data_dirs_exist():
+        dbs_make_data_dirs()
+
+    return
+
+def la_help():
+    return "list active tasks"
+    
+def do_la(params):
+    list_tasks(ACTIVE)
+    return
+
+def ld_help():
+    return "list tasks done"
+    
+def do_ld(params):
+    list_tasks(DONE)
+    return
+
+def lo_help():
+    return "list open tasks"
+    
+def do_lo(params):
+    list_tasks(OPEN)
+    return
+
 def log_help():
     return "log done task: <name> <project> <priority> <description>"
     
@@ -444,194 +534,9 @@ def do_log(params):
 
     return
 
-def help_help():
-    return "print this list"
-    
-def do_help(params):
-    usage()
-    return
-
-def version_help():
-    return "print the current version of dbs"
-    
-def do_version(params):
-    print("dbs, v%s -- the dain-bread simple TODO list" % VERSION)
-    print("Copyright (c) %s, %s" % (YEAR, AUTHOR))
-    return
-
-def show_help():
-    return "print out a single task: <name>"
-    
-def get_last_modified_time(fullpath):
-    fname = pathlib.Path(fullpath)
-    stat = fname.stat()
-    mtime = datetime.datetime.fromtimestamp(stat.st_mtime)
-    mstr = mtime.strftime("%Y-%m-%d %H:%M:%S")
-
-    tzS, tzD = time.tzname
-    if time.daylight:
-        tz = " " + tzD
-    else:
-        tz = " " + tzS
-
-    return mstr + tz
-
-def do_show(params):
-    fullpath = task_name_exists(params[0])
-    if not fullpath:
-        print("? task \"%s\" is not defined" % params[0])
-        sys.exit(1)
-
-    t = Task()
-    t.populate(fullpath, params[0])
-    t.print()
-
-    print("")
-    mtime = get_last_modified_time(fullpath)
-    print("%sLast Modified:%s %s" % (GREEN_ON, COLOR_OFF, mtime))
-    return
-
-def done_help():
-    return "mark a task done: <name>"
-    
-def do_done(params):
-    fullpath = task_name_exists(params[0])
-    if not fullpath:
-        print("? task \"%s\" is not defined" % params[0])
-        sys.exit(1)
-
-    t = Task()
-    t.populate(fullpath, params[0])
-    t.set_state(DONE)
-    t.move(DONE)
-    t.print()
-    os.remove(fullpath)
-    return
-
-def active_help():
-    return "mark a task active: <name>"
-    
-def do_active(params):
-    fullpath = task_name_exists(params[0])
-    if not fullpath:
-        print("? task \"%s\" is not defined" % params[0])
-        sys.exit(1)
-
-    t = Task()
-    t.populate(fullpath, params[0])
-    t.set_state(ACTIVE)
-    t.move(ACTIVE)
-    t.print()
-    os.remove(fullpath)
-    return
-
-def delete_help():
-    return "delete a task: <name>"
-    
-def do_delete(params):
-    fullpath = task_name_exists(params[0])
-    if not fullpath:
-        print("? task \"%s\" is not defined" % params[0])
-        sys.exit(1)
-
-    t = Task()
-    t.populate(fullpath, params[0])
-    t.set_state(DELETED)
-    t.move(DELETED)
-    t.print()
-    os.remove(fullpath)
-    return
-
-def note_help():
-    return "add a note to a task: <name> <note>"
-    
-def do_note(params):
-    if len(params) < 2:
-        print("? expected -- %s" % note_help())
-        print("  got: %s" % ' '.join(params))
-        sys.exit(1)
-
-    fullpath = task_name_exists(params[0])
-    if not fullpath:
-        print("? task \"%s\" is not defined" % params[0])
-        sys.exit(1)
-
-    t = Task()
-    t.populate(fullpath, params[0])
-    t.add_note(' '.join(params[1:]))
-    t.write(overwrite=True)
-    t.print()
-
-    return
-
-def recap_help():
-    return "list all tasks done in <n> weeks: <n>"
-    
-def do_recap(params):
-    weeks = 1
-    if len(params) >= 1:
-        if params[0].isnumeric():
-            weeks = int(params[0])
-        else:
-            print("? need a numeric value for number of weeks")
-            sys.exit(1)
-
-    if weeks > WEEK_LIMIT:
-        print("? no, you really don't want more than %d weeks worth." %
-              int(weeks))
-        sys.exit(1)
-
-    current_time = time.time()
-    elapsed_time = (weeks * 7) * 3600 * 24
-
-    fullpath = os.path.join(dbs_repo(), DONE)
-    tasks = {}
-    for (dirpath, dirnames, filenames) in os.walk(fullpath):
-    	for ii in filenames:
-           file_time = os.path.getmtime(os.path.join(fullpath, ii))
-
-           if current_time - file_time < elapsed_time:
-               t = Task()
-               t.populate(os.path.join(fullpath, ii), ii)
-               tasks[ii] = t
-
-    if len(tasks) < 1:
-        print("No %s tasks found." % DONE)
-        return
-
-    if weeks == 1:
-       print("Done during the last week:")
-    else:
-       print("Done during the last %d weeks:" % weeks)
-    one_line_header()
-    keys = tasks.keys()
-    for pri in ['h', 'm', 'l']:
-        for ii in sorted(keys):
-           if tasks[ii].get_priority() == pri:
-                tasks[ii].one_line()
-    return
-
 def lp_help():
     return "list open tasks for a project: <project>"
     
-def print_projects_found(count, space=True):
-    suffix = ''
-    if count > 1:
-        suffix = 's'
-    if space:
-        print("")
-    print("%d project%s found." % (count, suffix))
-    return
-
-def print_tasks_found(count, space=True):
-    suffix = ''
-    if count > 1:
-        suffix = 's'
-    if space:
-        print("")
-    print("%d task%s found." % (count, suffix))
-    return
-
 def do_lp(params):
     if len(params) < 1:
         print("? project name is required")
@@ -685,6 +590,92 @@ def do_lp(params):
         task_cnt += len(tasks)
 
     print_tasks_found(task_cnt)
+    return
+
+def next_help():
+    return "return next unused sequence number (to use as a name)"
+
+def do_next(params):
+    lnumpath = os.path.join(dbs_repo(), LASTNUM)
+    if os.path.exists(lnumpath):
+        fd = open(lnumpath, "r")
+        data = fd.readline()
+        fd.close()
+    if len(data) > 1:
+        n = int(data.strip())
+    else:
+        n = 1
+    fd = open(lnumpath, "w")
+    fd.seek(0)
+    lnum = "%04d" % n
+
+    while task_name_exists(lnum):
+        n = n + 1
+        lnum = "%04d" % n
+
+    fd.write("%d\n" % n)
+    fd.close()
+    print("Next usable sequence number: %s" % lnum)
+    return
+
+def note_help():
+    return "add a note to a task: <name> <note>"
+    
+def do_note(params):
+    if len(params) < 2:
+        print("? expected -- %s" % note_help())
+        print("  got: %s" % ' '.join(params))
+        sys.exit(1)
+
+    fullpath = task_name_exists(params[0])
+    if not fullpath:
+        print("? task \"%s\" is not defined" % params[0])
+        sys.exit(1)
+
+    t = Task()
+    t.populate(fullpath, params[0])
+    t.add_note(' '.join(params[1:]))
+    t.write(overwrite=True)
+    t.print()
+
+    return
+
+def num_help():
+    return "print project task counts"
+    
+def do_num(params):
+    summaries = {}
+    tasks = {}
+
+    for state in ALLOWED_STATES:
+        if state == DELETED:
+            continue
+        fullpath = os.path.join(dbs_repo(), state)
+        for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	    for ii in filenames:
+               t = Task()
+               t.populate(os.path.join(fullpath, ii), ii)
+               proj = t.get_project()
+               pri = t.get_priority()
+               state = t.get_state()
+               if proj not in summaries:
+                   summaries[proj] = 0
+               summaries[proj] += 1
+               tasks[ii] = t
+
+    if len(tasks) < 1:
+        print("No projects found.")
+        return
+
+    print("Task counts by project:")
+    print("-Name---  --Total--")
+    total = 0
+    for ii in sorted(summaries.keys()):
+        total += summaries[ii]
+        print("%s%-8s%s   %5d" % (GREEN_ON, ii, COLOR_OFF, summaries[ii]))
+
+    print_projects_found(len(summaries))
+    print_tasks_found(total, False)
     return
 
 def projects_help():
@@ -745,68 +736,77 @@ def do_projects(params):
 
     return
 
-def num_help():
-    return "print project task counts"
+def recap_help():
+    return "list all tasks done in <n> weeks: <n>"
     
-def do_num(params):
-    summaries = {}
-    tasks = {}
+def do_recap(params):
+    weeks = 1
+    if len(params) >= 1:
+        if params[0].isnumeric():
+            weeks = int(params[0])
+        else:
+            print("? need a numeric value for number of weeks")
+            sys.exit(1)
 
-    for state in ALLOWED_STATES:
-        if state == DELETED:
-            continue
-        fullpath = os.path.join(dbs_repo(), state)
-        for (dirpath, dirnames, filenames) in os.walk(fullpath):
-    	    for ii in filenames:
+    if weeks > WEEK_LIMIT:
+        print("? no, you really don't want more than %d weeks worth." %
+              int(weeks))
+        sys.exit(1)
+
+    current_time = time.time()
+    elapsed_time = (weeks * 7) * 3600 * 24
+
+    fullpath = os.path.join(dbs_repo(), DONE)
+    tasks = {}
+    for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	for ii in filenames:
+           file_time = os.path.getmtime(os.path.join(fullpath, ii))
+
+           if current_time - file_time < elapsed_time:
                t = Task()
                t.populate(os.path.join(fullpath, ii), ii)
-               proj = t.get_project()
-               pri = t.get_priority()
-               state = t.get_state()
-               if proj not in summaries:
-                   summaries[proj] = 0
-               summaries[proj] += 1
                tasks[ii] = t
 
     if len(tasks) < 1:
-        print("No projects found.")
+        print("No %s tasks found." % DONE)
         return
 
-    print("Task counts by project:")
-    print("-Name---  --Total--")
-    total = 0
-    for ii in sorted(summaries.keys()):
-        total += summaries[ii]
-        print("%s%-8s%s   %5d" % (GREEN_ON, ii, COLOR_OFF, summaries[ii]))
-
-    print_projects_found(len(summaries))
-    print_tasks_found(total, False)
+    if weeks == 1:
+       print("Done during the last week:")
+    else:
+       print("Done during the last %d weeks:" % weeks)
+    one_line_header()
+    keys = tasks.keys()
+    for pri in ['h', 'm', 'l']:
+        for ii in sorted(keys):
+           if tasks[ii].get_priority() == pri:
+                tasks[ii].one_line()
     return
 
-def next_help():
-    return "return next unused sequence number (to use as a name)"
+def show_help():
+    return "print out a single task: <name>"
+    
+def do_show(params):
+    fullpath = task_name_exists(params[0])
+    if not fullpath:
+        print("? task \"%s\" is not defined" % params[0])
+        sys.exit(1)
 
-def do_next(params):
-    lnumpath = os.path.join(dbs_repo(), LASTNUM)
-    if os.path.exists(lnumpath):
-        fd = open(lnumpath, "r")
-        data = fd.readline()
-        fd.close()
-    if len(data) > 1:
-        n = int(data.strip())
-    else:
-        n = 1
-    fd = open(lnumpath, "w")
-    fd.seek(0)
-    lnum = "%04d" % n
+    t = Task()
+    t.populate(fullpath, params[0])
+    t.print()
 
-    while task_name_exists(lnum):
-        n = n + 1
-        lnum = "%04d" % n
+    print("")
+    mtime = get_last_modified_time(fullpath)
+    print("%sLast Modified:%s %s" % (GREEN_ON, COLOR_OFF, mtime))
+    return
 
-    fd.write("%d\n" % n)
-    fd.close()
-    print("Next usable sequence number: %s" % lnum)
+def version_help():
+    return "print the current version of dbs"
+    
+def do_version(params):
+    print("dbs, v%s -- the dain-bread simple TODO list" % VERSION)
+    print("Copyright (c) %s, %s" % (YEAR, AUTHOR))
     return
 
 #-- main
