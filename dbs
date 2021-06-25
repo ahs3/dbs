@@ -286,6 +286,16 @@ def get_last_modified_time(fullpath):
 
     return mstr + tz
 
+def get_task(name):
+    fullpath = task_name_exists(name)
+    if not fullpath:
+        print("? task \"%s\" is not defined" % name)
+        return None
+
+    t = Task()
+    t.populate(fullpath, name)
+    return t
+
 def list_tasks(state, add_space=False):
     if state not in ALLOWED_STATES:
         print("? unknown task state requested")
@@ -338,6 +348,10 @@ def print_tasks_found(count, space=True):
     if space:
         print("")
     print("%d task%s found." % (count, suffix))
+    return
+
+def put_task(task):
+    task.write(overwrite=True)
     return
 
 def task_name_exists(name):
@@ -462,6 +476,35 @@ def do_done(params):
     os.remove(fullpath)
     return
 
+def down_help():
+    return "lower the priority of a task: <name> ..."
+    
+def do_down(params):
+    if len(params) < 1:
+        print("? must provide at least one task name")
+        sys.exit(1)
+    
+    for ii in params:
+        t = get_task(ii)
+        if not t:
+            continue
+        pri = t.get_priority()
+        if pri == 'h':
+            pri = 'm'
+        elif pri == 'm':
+            pri = 'l'
+        else:
+            print("? task \"%s\" already at 'l'" % ii)
+            continue
+        t.set_priority(pri)
+        t.add_note("downed priority")
+        put_task(t)
+
+    return
+
+def version_help():
+    return "print the current version of dbs"
+    
 def help_help():
     return "print this list"
     
@@ -799,6 +842,32 @@ def do_show(params):
     print("")
     mtime = get_last_modified_time(fullpath)
     print("%sLast Modified:%s %s" % (GREEN_ON, COLOR_OFF, mtime))
+    return
+
+def up_help():
+    return "raise the priority of a task: <name> ..."
+    
+def do_up(params):
+    if len(params) < 1:
+        print("? must provide at least one task name")
+        sys.exit(1)
+    
+    for ii in params:
+        t = get_task(ii)
+        if not t:
+            continue
+        pri = t.get_priority()
+        if pri == 'l':
+            pri = 'm'
+        elif pri == 'm':
+            pri = 'h'
+        else:
+            print("? task \"%s\" already at 'h'" % ii)
+            continue
+        t.set_priority(pri)
+        t.add_note("upped priority")
+        put_task(t)
+
     return
 
 def version_help():
