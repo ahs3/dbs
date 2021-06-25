@@ -5,3 +5,8 @@ TODO:
 -- add an edit command?
 -- use a pager?
 -- command to duplicate a task?
+      dbs dup <from> <to>
+-- command to raise/lower priority
+      dbs up <name>
+      dbs down <name>
+-- clean up ordering of functions in script (just getting messy)
