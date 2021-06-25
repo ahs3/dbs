@@ -195,47 +195,6 @@ class Task:
         return
 
 #-- helper functions
-def usage():
-    print("usage: dbs <command> [<parameters>]")
-    print("   defined commands:")
-    cmdlist = []
-    for ii in globals().keys():
-        if DO_PREFIX.search(str(ii)):
-            cmd = ii.replace('do_', '')
-            cmdlist.append(cmd)
-
-    for ii in sorted(cmdlist):
-        print("      %s\t=> %s" % (ii, globals()[ii + "_help"]()))
-
-    return
-
-def fix_task(info):
-    # munge up the task string if it's longer than one line
-    # NB: all the lengths and stuff are figured out by hand
-    prefix_len = 27
-    cnt = len(info)
-    termsize = shutil.get_terminal_size()
-    avail = termsize.columns - prefix_len
-    last = 0
-    res = ''
-    while cnt > 0:
-        #print('[a]', last, cnt, avail)
-        #print('[a]', res)
-        if cnt <= avail:
-           res += info[last:]
-           break
-        else:
-           t1 = info[last:last + avail]
-           ii = t1.rfind(' ')
-           t2 = info[last:last + ii]
-           res += t2
-           last = ii + 1
-           cnt -= ii
-           if cnt > 0:
-               res += '\n' + "                           "
-
-    return res
-
 def dbs_repo():
     return os.path.join(os.getenv("HOME"), ".dbs")
 
@@ -286,6 +245,33 @@ def dbs_make_repo():
     dbs_defconfig()
     return
 
+def fix_task(info):
+    # munge up the task string if it's longer than one line
+    # NB: all the lengths and stuff are figured out by hand
+    prefix_len = 27
+    cnt = len(info)
+    termsize = shutil.get_terminal_size()
+    avail = termsize.columns - prefix_len
+    last = 0
+    res = ''
+    while cnt > 0:
+        #print('[a]', last, cnt, avail)
+        #print('[a]', res)
+        if cnt <= avail:
+           res += info[last:]
+           break
+        else:
+           t1 = info[last:last + avail]
+           ii = t1.rfind(' ')
+           t2 = info[last:last + ii]
+           res += t2
+           last = ii + 1
+           cnt -= ii
+           if cnt > 0:
+               res += '\n' + "                           "
+
+    return res
+
 def one_line_header():
     print("-Name---  -Pri-  -Proj---  -Task---------------------------------")
     return
@@ -300,6 +286,20 @@ def task_name_exists(name):
             if name in filenames:
                 return os.path.join(dbs_repo(), state, name)
     return None
+
+def usage():
+    print("usage: dbs <command> [<parameters>]")
+    print("   defined commands:")
+    cmdlist = []
+    for ii in globals().keys():
+        if DO_PREFIX.search(str(ii)):
+            cmd = ii.replace('do_', '')
+            cmdlist.append(cmd)
+
+    for ii in sorted(cmdlist):
+        print("      %s\t=> %s" % (ii, globals()[ii + "_help"]()))
+
+    return
 
 #-- command functions
 def init_help():
