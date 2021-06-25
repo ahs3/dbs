@@ -1,4 +1,5 @@
 TODO:
+=====
 -- add recurring tasks
 -- do i want to be able to have tags, a la taskwarrior?  not sure
    i need 'em.
@@ -6,7 +7,13 @@ TODO:
 -- use a pager?
 -- command to duplicate a task?
       dbs dup <from> <to>
--- command to raise/lower priority
-      dbs up <name>
-      dbs down <name>
+-- all commands that could operate on more than one task should be able to
+-- convert functions to use get_task()/put_task()
+
+DONE:
+=====
+v0.3:
 -- clean up ordering of functions in script (just getting messy)
+-- command to raise/lower priority
+      dbs up <name> ...
+      dbs down <name> ...
