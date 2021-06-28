@@ -27,7 +27,7 @@ OPEN = "open"
 DONE = "done"
 DELETED = "deleted"
 ALLOWED_STATES = [ACTIVE, OPEN, DONE, DELETED]
-WEEK_LIMIT = 10
+DAYS_LIMIT = 60
 LASTNUM = "lastnum"
 
 RED_ON = "\033[38;5;9m"
@@ -798,24 +798,24 @@ def do_projects(params):
     return
 
 def recap_help():
-    return "list all tasks done in <n> weeks: <n>"
+    return "list all tasks done or touched in <n> days: <n>"
     
 def do_recap(params):
-    weeks = 1
+    days = 1
     if len(params) >= 1:
         if params[0].isnumeric():
-            weeks = int(params[0])
+            days = int(params[0])
         else:
-            print("? need a numeric value for number of weeks")
+            print("? need a numeric value for number of days")
             sys.exit(1)
 
-    if weeks > WEEK_LIMIT:
-        print("? no, you really don't want more than %d weeks worth." %
-              int(weeks))
+    if days > DAYS_LIMIT:
+        print("? no, you really don't want more than %d days worth." %
+              int(days))
         sys.exit(1)
 
     current_time = time.time()
-    elapsed_time = (weeks * 7) * 3600 * 24
+    elapsed_time = days * 3600 * 24
 
     fullpath = os.path.join(dbs_repo(), DONE)
     tasks = {}
@@ -831,10 +831,10 @@ def do_recap(params):
     if len(tasks) < 1:
         print("No %s tasks found." % DONE)
     else:
-        if weeks == 1:
-           print("Done during the last week:")
+        if days == 1:
+           print("Done during the last day:")
         else:
-           print("Done during the last %d weeks:" % weeks)
+           print("Done during the last %d days:" % days)
         one_line_header()
         keys = tasks.keys()
         for pri in ['h', 'm', 'l']:
@@ -857,10 +857,10 @@ def do_recap(params):
     if len(tasks) < 1:
         print("No %s tasks touched." % ACTIVE)
     else:
-        if weeks == 1:
-            print("Active tasks touched the last week:")
+        if days == 1:
+            print("Active tasks touched the last day:")
         else:
-            print("Active tasks touched during the last %d weeks:" % weeks)
+            print("Active tasks touched during the last %d days:" % days)
         one_line_header()
         keys = tasks.keys()
         for pri in ['h', 'm', 'l']:
@@ -883,10 +883,10 @@ def do_recap(params):
     if len(tasks) < 1:
         print("No %s tasks touched." % OPEN)
     else:
-        if weeks == 1:
-            print("Open tasks touched the last week:")
+        if days == 1:
+            print("Open tasks touched the last day:")
         else:
-            print("Open tasks touched during the last %d weeks:" % weeks)
+            print("Open tasks touched during the last %d days:" % days)
         one_line_header()
         keys = tasks.keys()
         for pri in ['h', 'm', 'l']:
