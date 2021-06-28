@@ -830,18 +830,69 @@ def do_recap(params):
 
     if len(tasks) < 1:
         print("No %s tasks found." % DONE)
-        return
-
-    if weeks == 1:
-       print("Done during the last week:")
     else:
-       print("Done during the last %d weeks:" % weeks)
-    one_line_header()
-    keys = tasks.keys()
-    for pri in ['h', 'm', 'l']:
-        for ii in sorted(keys):
-           if tasks[ii].get_priority() == pri:
-                tasks[ii].one_line()
+        if weeks == 1:
+           print("Done during the last week:")
+        else:
+           print("Done during the last %d weeks:" % weeks)
+        one_line_header()
+        keys = tasks.keys()
+        for pri in ['h', 'm', 'l']:
+            for ii in sorted(keys):
+               if tasks[ii].get_priority() == pri:
+                    tasks[ii].one_line()
+
+    fullpath = os.path.join(dbs_repo(), ACTIVE)
+    tasks = {}
+    for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	for ii in filenames:
+           file_time = os.path.getmtime(os.path.join(fullpath, ii))
+
+           if current_time - file_time < elapsed_time:
+               t = Task()
+               t.populate(os.path.join(fullpath, ii), ii)
+               tasks[ii] = t
+
+    print("")
+    if len(tasks) < 1:
+        print("No %s tasks touched." % ACTIVE)
+    else:
+        if weeks == 1:
+            print("Active tasks touched the last week:")
+        else:
+            print("Active tasks touched during the last %d weeks:" % weeks)
+        one_line_header()
+        keys = tasks.keys()
+        for pri in ['h', 'm', 'l']:
+            for ii in sorted(keys):
+               if tasks[ii].get_priority() == pri:
+                    tasks[ii].one_line()
+
+    fullpath = os.path.join(dbs_repo(), OPEN)
+    tasks = {}
+    for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	for ii in filenames:
+           file_time = os.path.getmtime(os.path.join(fullpath, ii))
+
+           if current_time - file_time < elapsed_time:
+               t = Task()
+               t.populate(os.path.join(fullpath, ii), ii)
+               tasks[ii] = t
+
+    print("")
+    if len(tasks) < 1:
+        print("No %s tasks touched." % OPEN)
+    else:
+        if weeks == 1:
+            print("Open tasks touched the last week:")
+        else:
+            print("Open tasks touched during the last %d weeks:" % weeks)
+        one_line_header()
+        keys = tasks.keys()
+        for pri in ['h', 'm', 'l']:
+            for ii in sorted(keys):
+               if tasks[ii].get_priority() == pri:
+                    tasks[ii].one_line()
     return
 
 def show_help():
