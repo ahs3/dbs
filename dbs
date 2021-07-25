@@ -400,6 +400,10 @@ def active_help():
     return "mark a task active: <name>"
     
 def do_active(params):
+    if len(params) < 1:
+        print("? must provide task name")
+        sys.exit(1)
+
     fullpath = task_name_exists(params[0])
     if not fullpath:
         print("? task \"%s\" is not defined" % params[0])
