@@ -8,12 +8,14 @@
 
 import collections
 import datetime
+import editor
 import os
 import os.path
 import pathlib
 import re
 import shutil
 import sys
+import tempfile
 import time
 
 #-- globals
@@ -560,6 +562,34 @@ def do_dup(params):
     tnew.set_name(newtask)
     tnew.add_note("duplicate of %s" % oldtask)
     put_task(tnew, overwrite=False)
+
+    return
+
+def edit_help():
+    return "edit a task: <name>"
+    
+def do_edit(params):
+    if len(params) < 1:
+        print("? must provide a task name")
+        sys.exit(1)
+    
+    origtask = get_task(params[0])
+    if not origtask:        # the original does not exist
+        return
+    fullpath = task_name_exists(params[0])
+    tmppath = tempfile.mktemp()
+    shutil.copyfile(fullpath, tmppath)
+
+    result = editor.edit(filename=tmppath)
+    newtask = Task()
+    newtask.populate(tmppath, origtask.get_name())
+    if newtask.get_state() == origtask.get_state():
+        put_task(newtask, overwrite=True)
+    else:
+        newtask.write()
+        os.remove(fullpath)
+
+    os.remove(tmppath)
 
     return
 
