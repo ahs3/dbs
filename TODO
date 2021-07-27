@@ -5,6 +5,8 @@ TODO:
    i need 'em.
 -- use a pager?
 -- make sure numbers can go to 5+ digits
+-- with 'dbs show', Notes will wrap around line, need to adjust formatting
+   (dbd show 0125, for example)
 
 DONE:
 =====
