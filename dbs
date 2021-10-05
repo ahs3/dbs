@@ -19,7 +19,7 @@ import tempfile
 import time
 
 #-- globals
-VERSION = "0.4"
+VERSION = "0.4.1"
 YEAR = "2021"
 AUTHOR = "Al Stone <ahs3@ahs3.net>"
 TASK_LIST = {}
@@ -1074,6 +1074,54 @@ def do_state(params):
             (GREEN_ON, ii, COLOR_OFF,
              summaries[ii][ACTIVE], summaries[ii][OPEN], summaries[ii][DONE],
              summaries[ii][ACTIVE] + summaries[ii][OPEN] + summaries[ii][DONE]
+            ))
+
+    print("")
+    if len(summaries.keys()) > 1:
+        ssuffix = 's'
+    if len(tasks) > 1:
+        tsuffix = 's'
+    print("%d project%s with %d task%s" % (len(summaries.keys()), ssuffix,
+          len(tasks), tsuffix))
+
+    return
+
+def todo_help():
+    return "print info for only projects with open tasks"
+    
+def do_todo(params):
+    summaries = {}
+    tasks = {}
+
+    for state in ALLOWED_STATES:
+        if state == DELETED or state == DONE:
+            continue
+        fullpath = os.path.join(dbs_repo(), state)
+        for (dirpath, dirnames, filenames) in os.walk(fullpath):
+    	    for ii in filenames:
+               t = Task()
+               t.populate(os.path.join(fullpath, ii), ii)
+               proj = t.get_project()
+               pri = t.get_priority()
+               state = t.get_state()
+               if proj not in summaries:
+                   summaries[proj] = { 'h':0, 'm':0, 'l':0, \
+                                       ACTIVE:0, OPEN:0, DONE:0 }
+               summaries[proj][pri] += 1
+               summaries[proj][state] += 1
+               tasks[ii] = t
+
+    if len(tasks) < 1:
+        print("No projects and no summaries.")
+        return
+
+    print("Summary by state:")
+    print("-Name---  -Active- -Open-  --Total--")
+    for ii in sorted(summaries.keys()):
+        print("%s%-8s%s    %3d     %3d     %5d" %
+            (GREEN_ON, ii, COLOR_OFF,
+             summaries[ii][ACTIVE], summaries[ii][OPEN],
+             summaries[ii][ACTIVE] + summaries[ii][OPEN]
             ))
 
     print("")

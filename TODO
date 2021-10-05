@@ -10,6 +10,9 @@ TODO:
 
 DONE:
 =====
+v0.4.1:
+-- added "todo" command: show only the projects with open/active tasks
+
 v0.4:
 -- added do_inactive() command (move from active to open)
 -- updated do_active(), do_delete() to get_task()/put_task()
