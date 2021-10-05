@@ -7,6 +7,7 @@ TODO:
 -- make sure numbers can go to 5+ digits
 -- with 'dbs show', Notes will wrap around line, need to adjust formatting
    (dbd show 0125, for example)
+-- add 'dbs move <old-project> <new-project>' command
 
 DONE:
 =====
