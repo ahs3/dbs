@@ -11,6 +11,9 @@ TODO:
 
 DONE:
 =====
+v0.5:
+-- Moved the dbs task class to a separate module file
+
 v0.4.1:
 -- added "todo" command: show only the projects with open/active tasks
 

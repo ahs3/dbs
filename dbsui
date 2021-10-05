@@ -1256,6 +1256,41 @@ def refresh_all_open(windows, page):
                      all_cb)
     return page
 
+def help_S():
+    return ('S', "List project state counts")
+
+def refresh_states(windows, page):
+    global ALL_TASKS, current_project
+
+    win = windows[LIST_PANEL]
+    trailer = windows[TRAILER_PANEL]
+
+    win = windows[LIST_PANEL]
+    trailer = windows[TRAILER_PANEL]
+    task_list = collections.OrderedDict()
+    for ii in ALL_TASKS:
+        t = ALL_TASKS[ii]
+        if t.get_state() == OPEN:
+            if t.get_name() not in task_list:
+                task_list[t.get_name()] = t
+
+    tlines = []
+    for ii in sorted(task_list):
+        t = task_list[ii]
+        info = '%4.4s\t' % t.get_name()
+        info += '%7.7s\t' % t.get_project()
+        if t.note_count() > 0:
+            info += '[%.2d]\t' % t.note_count()
+        else:
+            info += '     \t'
+        info += '%1s\t' % t.get_priority()
+        info += '%s' % t.get_task()
+        tlines.append(info)
+
+    page = show_page(win, trailer, 'List of Open Tasks', page, tlines,
+                     all_cb)
+    return page
+
 def build_windows(screen):
     windows = {}
     panels = {}
@@ -1509,6 +1544,15 @@ def main(stdscr):
                 panels[LIST_PANEL].show()
                 state = 40
 
+            elif key == 'S':
+                mode = 'list_page'
+                options = 'States || -: PrevPage   <space>: NextPage   q: Quit'
+                page = refresh_states(windows, 0)
+                panels[PROJ_PANEL].hide()
+                panels[TASK_PANEL].hide()
+                panels[LIST_PANEL].show()
+                state = 80
+
             else:
                 mode = 'error'
                 msg = "? no such command: %s" % str(key)
@@ -1633,6 +1677,23 @@ def main(stdscr):
             else:
                 page = refresh_all_open(windows, page)
                 state = 70
+
+        elif state == 80:
+            if key == 'q':
+                mode = 'main'
+                options = MAIN_OPTIONS
+                panels[LIST_PANEL].hide()
+                panels[PROJ_PANEL].show()
+                panels[TASK_PANEL].show()
+                page = 0
+                state = 0
+            elif key == '-':
+                page = refresh_states(windows, page-1)
+            elif key == ' ':
+                page = refresh_states(windows, page+1)
+            else:
+                page = refresh_states(windows, page)
+                state = 80
 
     return
 

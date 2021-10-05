@@ -21,7 +21,7 @@ import tempfile
 import time
 
 #-- globals
-VERSION = "0.4"
+VERSION = "0.4.1"
 YEAR = "2021"
 AUTHOR = "Al Stone <ahs3@ahs3.net>"
 CONFIG = "dbsrc"
