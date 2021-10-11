@@ -20,8 +20,11 @@ up until the newline).  There are a few limits:
    -- State is one of 'open', 'active', 'done' or 'deleted' [0]
    -- Priority is one of 'h', 'm', 'l'
 
-It's all pretty self-explanatory.  It is intentionally one Python script
-to try to keep things simple (I dislike really large files of source code).
+It's all pretty self-explanatory.  I've tried to keep this as simple as
+possible, but Python wants things packaged properly, and I wanted to have
+both a CLI version (dbs) and an ncurses version (dbsui) using the same code
+for managing tasks.  So, yeah, needed to create a module to package and
+distribute with.
 
 Installation is simple: clone the source tree, cd to the clone, then:
 
@@ -62,7 +65,7 @@ directories [1].
 
 Notes:
 [0] Nothing ever gets actually deleted unless you remove the files.
-[1] In order to sync across machines, I create ~/Dropbox/dbs and then
-    symlink: ln -s ~/Dropbox/dbs ~/.dbs.
+[1] In order to sync across machines, I create ~/.dbs and then use
+    syncthing to sync that directory across machines.
 [2] You could rename the script if you like; I don't think there's anything
     in the script that would preclude it.

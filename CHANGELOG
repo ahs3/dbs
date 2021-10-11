@@ -1,0 +1,30 @@
+DONE:
+=====
+v0.5.0:
+-- Moved the dbs task class to a separate module file
+-- Gave in and set up proper Python packaging; really changes to tree
+   structure for source files, and forces x.y.z versioning, but maybe
+   useful in the long term
+
+v0.4.1:
+-- added "todo" command: show only the projects with open/active tasks
+
+v0.4:
+-- added do_inactive() command (move from active to open)
+-- updated do_active(), do_delete() to get_task()/put_task()
+-- add a note each time I add/change/move/anything to a task
+-- convert functions to use get_task()/put_task()
+-- all commands that could operate on more than one task should be able to
+-- added do_priority() and do_state() to list project summaries by priority
+   and state, respectively
+-- when adding a task, you can use the name 'next' and that will use the
+   next sequence number
+-- added an edit command
+
+v0.3:
+-- clean up ordering of functions in script (just getting messy)
+-- command to raise/lower priority
+      dbs up <name> ...
+      dbs down <name> ...
+-- command to duplicate a task
+      dbs dup <from> <to>

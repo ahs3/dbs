@@ -21,7 +21,7 @@ import tempfile
 import time
 
 #-- globals
-VERSION = "0.4.1"
+VERSION = "0.5.0"
 YEAR = "2021"
 AUTHOR = "Al Stone <ahs3@ahs3.net>"
 CONFIG = "dbsrc"
@@ -42,6 +42,11 @@ RE_NOTE = re.compile('^Note:')
 HIGH = 'h'
 MEDIUM = 'm'
 LOW = 'l'
+
+RED_ON = "\033[38;5;9m"
+GREEN_ON = "\033[38;5;10m"
+YELLOW_ON = "\033[38;5;11m"
+COLOR_OFF = "\033[0m"
 
 #-- classes
 class Task:

@@ -34,11 +34,6 @@ ALL_TASKS = collections.OrderedDict()
 current_project = ''
 current_task = ''
 
-RED_ON = "\033[38;5;9m"
-GREEN_ON = "\033[38;5;10m"
-YELLOW_ON = "\033[38;5;11m"
-COLOR_OFF = "\033[0m"
-
 BOLD_BLUE_ON_BLACK = None
 BOLD_GREEN_ON_BLACK = None
 BOLD_PLAIN_TEXT = None
@@ -91,7 +86,6 @@ def do_active(params):
     if len(params) < 1:
         print("? must provide at least one task name")
         sys.exit(1)
-
     for ii in params:
         t = get_task(ii)
         if not t:
@@ -1392,7 +1386,7 @@ def resize_windows(screen, windows):
     DBG.write('end resize')
     return
 
-def main(stdscr):
+def dbsui(stdscr):
     global current_project
 
     windows = {}
@@ -1698,7 +1692,7 @@ def main(stdscr):
     return
 
 #-- link to main
-if __name__ == "__main__":
+def dbsui_main():
     DBG = Debug()
-    curses.wrapper(main)
+    curses.wrapper(dbsui)
     DBG.done()

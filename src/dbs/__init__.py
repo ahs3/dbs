@@ -22,11 +22,6 @@ import dbs_task
 from dbs_task import *
 
 #-- globals
-RED_ON = "\033[38;5;9m"
-GREEN_ON = "\033[38;5;10m"
-YELLOW_ON = "\033[38;5;11m"
-COLOR_OFF = "\033[0m"
-
 DO_PREFIX = re.compile('^do_')
 
 #-- helper functions
@@ -809,7 +804,7 @@ def do_version(params):
     return
 
 #-- main
-def main():
+def dbs():
     if len(sys.argv) < 2:
         usage()
         sys.exit(0)
@@ -829,7 +824,3 @@ def main():
         globals()[cmd](params)
 
     return
-
-#-- link to main
-if __name__ == "__main__":
-    main()

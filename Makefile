@@ -1,8 +1,24 @@
-all:
-	@echo "Seriously, there's nothing to do."
+all: build
+
+build:
+	python3 -m build
+
+test-upload:
+	python3 -m twine upload --repository testpypi dist/*
+
+upload:
+	python3 -m twine upload dist/*
+
+test-clean:
+	rm -rf dist 
+	pip uninstall dbs-todo
 
 clean:
-	@echo "Still nothing to do."
+	rm -rf dist
+
+test-install:
+	#pip install -i https://testpypi.org/simple/ --no-deps --upgrade dbs-todo
+	pip install --no-deps --upgrade dist/dbs_todo-*-any.whl
 
 install:
-	cp dbs ${HOME}/bin
+	pip install dbs-todo
