@@ -28,6 +28,7 @@ import time
 HELP_PREFIX = re.compile('^help_')
 
 ACTIVE_PROJECTS = collections.OrderedDict()
+ACTIVE_TASKS = collections.OrderedDict()
 ALL_PROJECTS = collections.OrderedDict()
 ALL_TASKS = collections.OrderedDict()
 
@@ -52,6 +53,10 @@ HIGH = 'h'
 MEDIUM = 'm'
 LOW = 'l'
 
+MAIN_MODE = 'main'
+VERSION_MODE = 'version'
+ERROR_MODE = 'error'
+
 CLI_PANEL     = 'cli'
 HEADER_PANEL  = 'hdr'
 LIST_PANEL    = 'lst'
@@ -65,6 +70,329 @@ DBG = None
 PROJECT_WIDTH = 20
 
 #-- classes
+class DbsPanel:
+    def __init__(self, name, screen, content_cb):
+        # basic initialization
+        self.name = name
+        self.current_index = 0
+        self.current_line = 0
+        self.current_page = 0
+        self.page_height = 0
+
+        self.content_cb = content_cb
+        self.content = []
+
+        self.current_mode = MAIN_MODE
+        self.modes = { MAIN_MODE: ''}
+
+        self.screen = screen
+        self.window = None
+        self.panel = None
+        return
+    
+    def create(self):
+        # create the window -- needs replacing for each panel type
+        print("create not implemented")
+        return
+
+    def create_win(self, height, width, y, x):
+        global DBG
+        # create the window
+
+        # how big is the screen?
+        maxy, maxx = self.screen.getmaxyx()
+        DBG.write('create_%s: maxy, maxx: %d, %d' % (self.name, maxy, maxx))
+
+        # create the window
+        self.window = self.screen.subwin(height, width, y, x)
+        self.panel = curses.panel.new_panel(self.window)
+        DBG.write('%s: h,w,y,x: %d, %d, %d, %d' % 
+                  (self.name, height, width, y, x))
+        self.window.erase()
+        self.page_height = height
+        return
+
+    def refresh(self, mode):
+        # refresh the window content -- needs replacing for each panel type
+        print("refresh not implemented")
+        return
+
+    def hide(self):
+        # hide the window and content
+        self.panel.hide()
+        return
+
+    def show(self):
+        # show the window and content
+        self.panel.show()
+        return
+
+    def next(self):
+        global DBG
+
+        # go to next line of content
+        self.current_index += 1
+        if self.current_index > len(self.content) - 1:
+            self.current_index = len(self.content) - 1
+
+        # move down one line, page if needed
+        last_line = ((self.current_page + 1) * self.page_height) - 1
+        if self.current_index >= last_line:
+            self.current_page += 1
+        maxpage = len(self.content) / self.page_height
+        if self.current_page > maxpage:
+            self.current_page = maxpage
+
+        DBG.write('next: index %d, page %d, height %d' %
+                  (self.current_index, self.current_page, self.page_height))
+        return
+
+    def prev(self):
+        global DBG
+
+        # go to previous line of content
+        self.current_index -= 1
+        if self.current_index < 0:
+            self.current_index = 0
+
+        # move up one line, page if needed
+        first_line = (self.current_page * self.page_height) - 1
+        if self.current_index < first_line:
+            self.current_page -= 1
+        if self.current_page < 0:
+            self.current_page = 0
+
+        DBG.write('prev: index %d, page %d, height %d' %
+                  (self.current_index, self.current_page, self.page_height))
+        return
+
+    def set_mode(self, mode, text):
+        self.modes[mode] = text
+        return
+
+    def get_mode(self):
+        return self.current_mode
+    
+    def resize(self, screen):
+        del self.panel
+        del self.window
+        self.screen = screen
+        self.create()
+        return
+
+class DbsHeader(DbsPanel):
+    def __init__(self, name, screen, content_cb):
+        super(DbsHeader, self).__init__(name, screen, content_cb)
+        self.modes = { MAIN_MODE: MAIN_OPTIONS }
+        self.create()
+        return
+
+    def create(self):
+        maxy, maxx = self.screen.getmaxyx()
+        super(DbsHeader, self).create_win(1, maxx, 0, 0)
+        return
+
+    def refresh(self, mode):
+        self.mode = mode
+        if mode != MAIN_MODE:
+            self.mode = MAIN_MODE
+        self.content_cb(self.screen, self.window, self.modes[self.current_mode])
+        return
+
+
+class DbsTrailer(DbsPanel):
+    def __init__(self, name, screen, content_cb):
+        super(DbsTrailer, self).__init__(name, screen, content_cb)
+        self.mode = MAIN_MODE
+        self.options = { MAIN_MODE: '' }
+        self.create()
+        return
+
+    def create(self):
+        maxy, maxx = self.screen.getmaxyx()
+        super(DbsTrailer, self).create_win(1, maxx, maxy-2, 0)
+        return
+
+    def refresh(self, mode):
+        self.mode = mode
+        if mode != MAIN_MODE:
+            self.mode = MAIN_MODE
+        self.content_cb(self.screen, self.window, self.options[self.mode])
+        return
+
+
+class DbsCli(DbsPanel):
+    def __init__(self, name, screen, content_cb):
+        super(DbsCli, self).__init__(name, screen, content_cb)
+        self.mode = MAIN_MODE
+        self.options = { MAIN_MODE: '',
+                         VERSION_MODE:  'dbsui, v' + dbs_task.VERSION + ' ',
+                         ERROR_MODE: '',
+                       }
+        self.create()
+        return
+
+    def create(self):
+        maxy, maxx = self.screen.getmaxyx()
+        super(DbsCli, self).create_win(1, maxx, maxy-1, 0)
+        return
+
+    def refresh(self, mode):
+        self.mode = mode
+        self.content_cb(self.screen, self.window, self.options[self.mode])
+        return
+
+
+class DbsProjects(DbsPanel):
+    def __init__(self, name, screen, content_cb):
+        super(DbsProjects, self).__init__(name, screen, content_cb)
+        self.mode = MAIN_MODE
+        self.options = { MAIN_MODE: '', }
+        self.create()
+        self.current_project = ''
+        self.populate()
+        return
+
+    def create(self):
+        maxy, maxx = self.screen.getmaxyx()
+        self.page_height = maxy - 2
+        width = PROJECT_WIDTH
+        super(DbsProjects, self).create_win(self.page_height, width, 1, 0)
+        return
+
+    def refresh(self, mode):
+        global current_project
+        global DBG
+
+        self.mode = mode
+        if mode != MAIN_MODE:
+            self.mode = MAIN_MODE
+        start = self.current_page * (self.page_height - 1)
+        plist = self.content[start:]
+        DBG.write('DbsProject::refresh: "%s", first, last = %d, %d' %
+                  (current_project, start, len(self.content)-1))
+        current_project = self.current_project
+        self.content_cb(self.screen, self.window, plist)
+        return
+
+    def populate(self):
+        global ACTIVE_PROJECTS, current_project
+        global DBG
+
+        plist = []
+        for ii in ACTIVE_PROJECTS.keys():
+            p = ACTIVE_PROJECTS[ii]
+            pname = ii[0:PROJECT_WIDTH-1]
+            active = p[ACTIVE]
+            if active > 0:
+                line = "%s\t[%d]" % (pname, active)
+            else:
+                line = "%s" % (pname)
+            plist.append(line)
+
+        self.content = sorted(plist)
+        if not self.current_project and len(self.content) > 0:
+            self.current_project = self.content[0].split('\t')[0]
+        if not current_project:
+            current_project = self.current_project
+        return
+
+    def next_project(self):
+        global current_project
+
+        self.next()
+        self.current_project = self.content[self.current_index].split('\t')[0]
+        current_project = self.current_project
+
+        return
+
+    def prev_project(self):
+        global current_project
+
+        self.prev()
+        self.current_project = self.content[self.current_index].split('\t')[0]
+        current_project = self.current_project
+
+        return
+
+
+class DbsTasks(DbsPanel):
+    def __init__(self, name, screen, content_cb):
+        super(DbsTasks, self).__init__(name, screen, content_cb)
+        self.mode = MAIN_MODE
+        self.options = { MAIN_MODE: '', }
+        self.create()
+        self.current_task = ''
+        self.populate()
+        return
+
+    def create(self):
+        maxy, maxx = self.screen.getmaxyx()
+        self.page_height = maxy - 2
+        self.page_width = maxx - PROJECT_WIDTH
+        super(DbsTasks, self).create_win(self.page_height, self.page_width,
+                     1, PROJECT_WIDTH)
+        return
+
+    def refresh(self, mode):
+        global current_task
+        global DBG
+
+        self.mode = mode
+        if mode != MAIN_MODE:
+            self.mode = MAIN_MODE
+        start = self.current_page * (self.page_height - 1)
+        plist = self.content[start:]
+        DBG.write('DbsTasks::refresh: first, last, height = %d, %d, %d' %
+                  (start, len(self.content)-1, self.page_height))
+        self.content_cb(self.screen, self.window, plist)
+        return
+
+    def populate(self):
+        global ACTIVE_TASKS, current_project, current_task
+
+        tlist = get_current_task_list(current_project)
+        clist = []
+        for ii in tlist:
+            t = ACTIVE_TASKS[ii]
+            info = '%4.4s' % t.get_name()
+            if t.note_count() > 0:
+                info += '\t[%2d]' % t.note_count()
+            else:
+                info += '\t    '
+            info += '\t%s' % t.get_priority()
+            info += '\t%s' % t.get_task()
+            if t.get_state() == ACTIVE:
+                info += '\tACTIVE'
+            clist.append(info)
+
+        self.content = sorted(clist)
+        if len(self.content) > 0:
+            self.current_task = self.content[0].split('\t')[0]
+        current_task = self.current_task
+        self.current_index = 0
+        self.current_page = 0
+        return
+
+    def next_task(self):
+        global current_task
+
+        self.next()
+        self.current_task = self.content[self.current_index].split('\t')[0]
+        current_task = self.current_task
+
+        return
+
+    def prev_task(self):
+        global current_task
+
+        self.prev()
+        self.current_task = self.content[self.current_index].split('\t')[0]
+        current_task = self.current_task
+
+        return
+
+
 class Debug:
     def __init__(self):
         self.fd = open('debug.log', 'w')
@@ -624,13 +952,6 @@ def do_up(params):
 
     return
 
-def show_error(win, msg, attrs):
-    maxy, maxx = win.getmaxyx()
-    blanks = ' '.ljust(maxx-1, ' ')
-    win.addstr(0, 0, blanks, attrs)
-    win.addstr(0, 0, msg, attrs)
-    return
-
 #-- main
 def help_j():
     return ('j', "Next task")
@@ -769,7 +1090,7 @@ def refresh_header(screen, win, options):
     win.addstr(0, 0, options, BOLD_WHITE_ON_BLUE)
     return
 
-def refresh_trailer(win, msg):
+def refresh_trailer(screen, win, msg):
     (height, width) = win.getmaxyx()
     dashes = ''.ljust(width-1, '-')
     win.erase()
@@ -784,214 +1105,92 @@ def refresh_trailer(win, msg):
         win.addstr(0, width-len(vers)-4, vers, BOLD_WHITE_ON_BLUE)
     return
 
-def clear_cli(win):
+def refresh_cli(screen, win, msg):
     maxy, maxx = win.getmaxyx()
-    blanks = ' '.ljust(maxx-1, ' ')
-    win.addstr(0, 0, blanks, PLAIN_TEXT)
+    if len(msg) > 0:
+        win.addstr(0, 0, msg, BOLD_RED_ON_BLACK)
     return
 
-def refresh_project_list(screen, win, adjustment):
-    global ACTIVE_PROJECTS, current_project
+def refresh_projects(screen, win, lines):
+    global current_project
+    global DBG
 
-    win.erase()
-    win.mvwin(1, 0)
-    (sheight, swidth) = screen.getmaxyx()
-    (height, width) = win.getmaxyx()
-    blanks = ''.ljust(PROJECT_WIDTH-1, ' ')
-
-    for ii in range(0, height-1):
-        win.addch(ii, PROJECT_WIDTH-1, "|", BLUE_ON_BLACK)
-
-    line = 0
-    count = 0
-    keys = ACTIVE_PROJECTS.keys()
-    for ii in sorted(keys):
-        p = ACTIVE_PROJECTS[ii]
-        if count < adjustment:
-            count += 1
-            continue
-
-        if line >= height - 1:
-            return count
-
-        if not current_project:
-            current_project = ii
-
-        active = p[ACTIVE]
-        if ii == current_project:
+    maxy, maxx = win.getmaxyx()
+    blanks = ''.ljust(maxx-1, ' ')
+    linenum = 0
+    for ii in lines:
+        info = ii.split('\t')
+        pname = info[0]
+        attrs = PLAIN_TEXT
+        if len(info) > 1:
+            attrs = BOLD_WHITE_ON_BLUE
+        if pname == current_project:
             attrs = BOLD_WHITE_ON_RED
-        else:
-            if active > 0:
-                attrs = BOLD_GREEN_ON_BLACK
-            else:
-                attrs = PLAIN_TEXT
-        win.addstr(line, 0, blanks, attrs)
-        pname = ii[0:PROJECT_WIDTH-1]
-        if active > 0:
-            win.addstr(line, 0, "%s [%d]" % (pname, active), attrs)
-        else:
-            win.addstr(line, 0, "%s" % (pname), attrs)
-        line += 1
-        count += 1
-
-    return 0
-
-def current_project_next():
-    global ACTIVE_PROJECTS, current_project
-
-    keys = ACTIVE_PROJECTS.keys()
-    now = False
-    for ii in sorted(keys):
-        if now:
-            current_project = ii
+        win.addstr(linenum, 0, blanks, attrs)
+        win.addstr(linenum, 0, ii, attrs)
+        win.addch(linenum, PROJECT_WIDTH-1, "|", BLUE_ON_BLACK)
+        # DBG.write('refresh_projects: ' + str(linenum))
+        linenum += 1
+        if linenum >= maxy - 1:
             return
-        if current_project == ii:
-            now = True
+
+    while linenum < maxy-1:
+        win.addch(linenum, PROJECT_WIDTH-1, "|", BLUE_ON_BLACK)
+        linenum += 1
 
     return
 
-def current_project_prev():
-    global ACTIVE_PROJECTS, current_project
 
-    keys = ACTIVE_PROJECTS.keys()
-    last = ''
-    for ii in sorted(keys):
-        if current_project == ii:
-            current_project = last
-            return
-        last = ii
+def get_current_task_list(current_project):
+    global ACTIVE_PROJECTS, ALL_TASKS, ACTIVE_TASKS
+    global current_task
+    global DBG
 
-    return
-
-def refresh_task_list(screen, win, adjustment):
-    global ACTIVE_PROJECTS, ALL_TASKS, current_project, current_task
-
-    (sheight, swidth) = screen.getmaxyx()
-    win.erase()
-    (height, width) = win.getmaxyx()
-    blanks = ''.ljust(swidth - PROJECT_WIDTH -1, ' ')
-
-    line = 0
-    count = 0
-
+    DBG.write('get_current_task_list: ' + current_project)
+    ACTIVE_TASKS.clear()
     task_list = []
     task_list = ACTIVE_PROJECTS[current_project][HIGH] + \
                 ACTIVE_PROJECTS[current_project][MEDIUM] + \
                 ACTIVE_PROJECTS[current_project][LOW]
-
-    if current_task not in task_list:
-        current_task = ''
-
     for ii in task_list:
         t = ALL_TASKS[ii.get_name()]
+        if t.get_name() not in ACTIVE_TASKS:
+            ACTIVE_TASKS[t.get_name()] = ii
 
-        if count < adjustment:
-            count += 1
-            continue
+    tlist = sorted(ACTIVE_TASKS.keys())
+    current_task = tlist[0]
 
-        if line >= height - 1:
-            return count
+    return tlist
 
-        active = False
-        s = t.get_state()
+def refresh_tasks(screen, win, lines):
+    global ACTIVE_TASKS, current_task
 
-        if not current_task:
-            current_task = ii
-
-        if s == ACTIVE:
-            active = True
-
-        if ii == current_task:
-            attrs = BOLD_WHITE_ON_RED
-        else:
-            if active:
-                attrs = BOLD_GREEN_ON_BLACK
-            else:
-                pri = t.get_priority()
-                if pri == HIGH:
-                    attrs = RED_ON_BLACK
-                elif pri == MEDIUM:
-                    attrs = GREEN_ON_BLACK
-                else:
-                    attrs = PLAIN_TEXT
-
-        win.addstr(line, 0, blanks, attrs)
-        info = '%4.4s' % t.get_name()
-        if t.note_count() > 0:
-            info += ' [%2d]' % t.note_count()
-        else:
-            info += '     '
-        info += ' %1s' % t.get_priority()
-        info += ' %s' % t.get_task()
-        length = (width - 1)
-        win.addstr(line, 0, "%s" % (info[0:length]), attrs)
-        line += 1
-        count += 1
-
-    return 0
-
-def current_task_next():
-    global ACTIVE_PROJECTS, current_task
-
-    task_list = []
-    task_list = ACTIVE_PROJECTS[current_project][HIGH] + \
-                ACTIVE_PROJECTS[current_project][MEDIUM] + \
-                ACTIVE_PROJECTS[current_project][LOW]
-
-    now = False
-    for ii in task_list:
-        if now:
-            current_task = ii
-            return
-        if current_task == ii:
-            now = True
-
-    return
-
-def current_task_prev():
-    global ACTIVE_PROJECTS, current_task
-
-    task_list = []
-    task_list = ACTIVE_PROJECTS[current_project][HIGH] + \
-                ACTIVE_PROJECTS[current_project][MEDIUM] + \
-                ACTIVE_PROJECTS[current_project][LOW]
-
-    last = ''
-    for ii in task_list:
-        if current_task == ii:
-            current_task = last
-            return
-        last = ii
-
-    return
-
-def show_page(win, trailer, trailer_text, page, lines, line_callback):
-    (maxy, maxx) = win.getmaxyx()
+    maxy, maxx = win.getmaxyx()
     blanks = ''.ljust(maxx-1, ' ')
-    win.erase()
+    linenum = 0
+    for ii in lines:
+        info = ii.split('\t')
+        tname = info[0]
+        attrs = PLAIN_TEXT
+        pri = info[2]
+        if pri == HIGH:
+            attrs = BOLD_RED_ON_BLACK
+        elif pri == MEDIUM:
+            attrs = BOLD_GREEN_ON_BLACK
+        if ACTIVE_TASKS[tname].get_state() == ACTIVE:
+            attrs = BOLD_WHITE_ON_BLUE
+        if tname == current_task:
+            attrs = BOLD_WHITE_ON_RED
+        txt = "%5.5s  %4s  %1s  %s" % (info[0], info[1], info[2], info[3])
+        win.addstr(linenum, 0, blanks, attrs)
+        win.addstr(linenum, 0, txt[0:maxx-1], attrs)
+        # DBG.write('refresh_tasks: <' + str(linenum) + '> ' + txt[0:maxx-1])
+        linenum += 1
+        if linenum >= maxy - 1:
+            return
 
-    pages = int(len(lines) / maxy)
-    if len(lines) % maxy > 0 and len(lines) > maxy:
-        pages += 1
-    if page >= pages:
-        page = pages - 1
-    if page < 0:
-        page = 0
-    start = page * maxy
-    DBG.write('pages %d, start %d' % (pages, start))
+    return
 
-    count = 0
-    while count < maxy and start < len(lines):
-        line_callback(win, maxx, count, lines[start])
-        count += 1
-        start += 1
-
-    percent = (start / len(lines)) * 100.0
-    #DBG.write(
-    #  'show_page: page %d, pages %d, start %d, len(lines) %d, percent %d' %
-    #  (page, pages, start, len(lines), percent))
-    refresh_trailer(trailer, ' %s (%d%%) ' % (trailer_text, percent))
-    return page
 
 def help_help():
     return ('?', "help (show this list)")
@@ -1036,11 +1235,11 @@ def open_cb(win, maxx, linenum, line):
     return
 
 def refresh_open(windows, page):
-    global ALL_TASKS, current_task
+    global ACTIVE_TASKS, current_task
 
     win = windows[LIST_PANEL]
     trailer = windows[TRAILER_PANEL]
-    tinfo = current_task.show_text()
+    tinfo = ACTIVE_TASKS[current_task].show_text()
     tlines = tinfo.split('\n')
 
     page = show_page(win, trailer, 'Open Task', page, tlines, open_cb)
@@ -1286,6 +1485,8 @@ def refresh_states(windows, page):
     return page
 
 def build_windows(screen):
+    global DBG
+
     windows = {}
     panels = {}
 
@@ -1294,12 +1495,6 @@ def build_windows(screen):
     # how big is the screen?
     maxy, maxx = screen.getmaxyx()
     DBG.write('build: maxy, maxx: %d, %d' % (maxy, maxx))
-
-    # create header: blue bkgrd, white text, top line
-    key = HEADER_PANEL
-    windows[key] = screen.subwin(1, maxx, 0, 0)
-    panels[key] = curses.panel.new_panel(windows[key])
-    DBG.write('hdr: h,w,y,x: %d, %d, %d, %d' % (1, maxx, 0, 0))
 
     # create project list: 1/4, left of screen
     key = PROJ_PANEL
@@ -1316,20 +1511,8 @@ def build_windows(screen):
     panels[key] = curses.panel.new_panel(windows[key])
     DBG.write('tsk: h,w,y,x: %d, %d, %d, %d' % (main_height, tsk_width, 1, prj_width))
 
-    # create trailer: same, but summary of #projects, #tasks
-    key = TRAILER_PANEL
-    windows[key] = screen.subwin(1, maxx, maxy-2, 0)
-    panels[key] = curses.panel.new_panel(windows[key])
-    DBG.write('trlr: h,w,y,x: %d, %d, %d, %d' % (1, maxx, maxy-2, 0))
-
-    # create command: black bkgrd, white text, bottom line of screen
-    key = CLI_PANEL
-    windows[key] = screen.subwin(1, maxx, maxy-1, 0)
-    panels[key] = curses.panel.new_panel(windows[key])
-    DBG.write('cli: h,w,y,x: %d, %d, %d, %d' % (1, maxx, maxy-1, 0))
-
-    # create several screens and panels, then hide them for later use
-    # (help, show and done, for now)
+    # create a generic list panel to be re-used for all sorts of things
+    # (help, show and done, for example)
     main_height = maxy - 3
     for ii in [LIST_PANEL]:
         windows[ii] = screen.subwin(main_height, maxx, 1, 0)
@@ -1339,51 +1522,11 @@ def build_windows(screen):
     DBG.write('end build')
     return (windows, panels)
 
-def resize_windows(screen, windows):
-    # how big is the screen?
-    maxy, maxx = screen.getmaxyx()
-    screen.resize(maxy, maxx)
-    screen.erase()
-
-    DBG.write('resize: y,x: %d, %d' % (maxy, maxx))
-
-    windows[HEADER_PANEL].resize(1, maxx)
-    windows[HEADER_PANEL].mvwin(0, 0)
-    DBG.write('hdr: h,w,y,x: %d, %d, %d, %d' % (1, maxx, 0, 0))
-
-    # project list: 1/4, left of screen
-    main_height = maxy - 3
-    prj_width = PROJECT_WIDTH
-    windows[PROJ_PANEL].resize(main_height, prj_width)
-    windows[PROJ_PANEL].mvwin(1, 0)
-    DBG.write('prj: h,w,y,x: %d, %d, %d, %d' % (main_height, prj_width, 1, 0))
-
-    # task list: 3/4, right of screen
-    tsk_width = maxx - prj_width
-    windows[TASK_PANEL].resize(main_height, tsk_width-1)
-    windows[TASK_PANEL].mvwin(1, prj_width)
-    DBG.write('tsk: h,w,y,x: %d, %d, %d, %d' % (main_height, tsk_width-1, 1, prj_width))
-
-    windows[TRAILER_PANEL].resize(1, maxx)
-    windows[TRAILER_PANEL].mvwin(maxy-2, 0)
-    DBG.write('trlr: h,w,y,x: %d, %d, %d, %d' % (1, maxx, maxy-2, 0))
-
-    windows[CLI_PANEL].resize(1, maxx)
-    windows[CLI_PANEL].mvwin(maxy-1, 0)
-    DBG.write('cli: h,w,y,x: %d, %d, %d, %d' % (1, maxx, maxy-1, 0))
-
-    # update several screens and panels
-    # (help, show and done, for now)
-    main_height = maxy - 3
-    for ii in [LIST_PANEL]:
-        windows[ii].resize(main_height, maxx)
-        windows[ii].mvwin(1, 0)
-        DBG.write('%s: h,w,y,x: %d, %d, %d, %d' % (ii, main_height, maxx, 1, 0))
-
-    for ii in windows:
-        windows[ii].erase()
-
-    DBG.write('end resize')
+def resize_windows(stdscr, windows):
+    curses.curs_set(0)
+    stdscr.clear()
+    for ii in windows.keys():
+        windows[ii].resize(stdscr)
     return
 
 def dbsui(stdscr):
@@ -1399,33 +1542,25 @@ def dbsui(stdscr):
     build_text_attrs()
 
     # build up all of the windows and panels
-    windows, panels = build_windows(stdscr)
+    windows[HEADER_PANEL] = DbsHeader(HEADER_PANEL, stdscr, refresh_header)
+    windows[TRAILER_PANEL] = DbsTrailer(TRAILER_PANEL, stdscr, refresh_trailer)
+    windows[CLI_PANEL] = DbsCli(CLI_PANEL, stdscr, refresh_cli)
+    windows[PROJ_PANEL] = DbsProjects(PROJ_PANEL, stdscr, refresh_projects)
+    windows[TASK_PANEL] = DbsTasks(TASK_PANEL, stdscr, refresh_tasks)
 
-    # set up our initial state
-    projects_adjustment = 0
-    tasks_adjustment = 0
-
-    page = 0
     state = 0
-    options = MAIN_OPTIONS
-    mode = 'main'
+    mode = MAIN_MODE
     while True:
-        refresh_header(stdscr, windows[HEADER_PANEL], options)
+        stdscr.clear()
+        maxy, maxx = stdscr.getmaxyx()
 
-        if mode not in ['version', 'error']:
-            clear_cli(windows[CLI_PANEL])
-        elif mode in ['list_page' ]:
-            pass
-        else:
-            mode = 'main'
+        windows[HEADER_PANEL].refresh(mode)
+        windows[TRAILER_PANEL].refresh(mode)
+        windows[CLI_PANEL].refresh(mode)
+        windows[PROJ_PANEL].refresh(mode)
+        windows[TASK_PANEL].refresh(mode)
 
-        if mode == 'main':
-            refresh_trailer(windows[TRAILER_PANEL], '')
-            projects_adjustment = refresh_project_list(stdscr, 
-                                   windows[PROJ_PANEL],
-                                           projects_adjustment)
-            tasks_adjustment = refresh_task_list(stdscr, windows[TASK_PANEL],
-                           tasks_adjustment)
+        mode = MAIN_MODE
 
         curses.panel.update_panels()
         stdscr.refresh()
@@ -1437,262 +1572,270 @@ def dbsui(stdscr):
                 break
 
             elif key == 'v':
-                mode = 'version'
-                show_version(windows[CLI_PANEL], PLAIN_TEXT)
+                mode = VERSION_MODE
                 state = 0
 
-            elif key == '?':
-                options = 'Help || -: PrevPage   <space>: NextPage   q: Quit'
-                mode = 'list_page'
-                panels[PROJ_PANEL].hide()
-                panels[TASK_PANEL].hide()
-                page = refresh_help(windows, 0)
-                panels[LIST_PANEL].show()
-                state = 10
+#           elif key == '?':
+#               options = 'Help || -: PrevPage   <space>: NextPage   q: Quit'
+#               mode = 'list_page'
+#               panels[PROJ_PANEL].hide()
+#               panels[TASK_PANEL].hide()
+#               page[LIST_PANEL] = refresh_help(windows, 0)
+#               panels[LIST_PANEL].show()
+#               state = 10
 
             elif key == 'j' or key == curses.KEY_DOWN:
-                current_task_next()
-                tasks_adjustment = refresh_task_list(stdscr, 
-                                                     windows[TASK_PANEL],
-                                                     tasks_adjustment)
+                windows[TASK_PANEL].next_task()
 
             elif key == 'k' or key == curses.KEY_UP:
-                current_task_prev()
-                tasks_adjustment = refresh_task_list(stdscr, 
-                                                     windows[TASK_PANEL],
-                                                     tasks_adjustment)
+                windows[TASK_PANEL].prev_task()
 
-            elif key == '':
-                mode = 'list_page'
-                options = 'All || -: PrevPage   <space>: NextPage   q: Quit'
-                page = refresh_all(windows, 0)
-                panels[PROJ_PANEL].hide()
-                panels[TASK_PANEL].hide()
-                panels[LIST_PANEL].show()
-                state = 50
+#           elif key == '':
+#               mode = 'list_page'
+#               options = 'All || -: PrevPage   <space>: NextPage   q: Quit'
+#               page[LIST_PANEL] = refresh_all(windows, 0)
+#               panels[PROJ_PANEL].hide()
+#               panels[TASK_PANEL].hide()
+#               panels[LIST_PANEL].show()
+#               state = 50
 
-            elif key == '':
-                mode = 'list_page'
-                options = 'Deleted || -: PrevPage   <space>: NextPage   q: Quit'
-                page = refresh_deleted(windows, 0)
-                panels[PROJ_PANEL].hide()
-                panels[TASK_PANEL].hide()
-                panels[LIST_PANEL].show()
-                state = 60
+#           elif key == '':
+#               mode = 'list_page'
+#               options = 'Deleted || -: PrevPage   <space>: NextPage   q: Quit'
+#               page[LIST_PANEL] = refresh_deleted(windows, 0)
+#               panels[PROJ_PANEL].hide()
+#               panels[TASK_PANEL].hide()
+#               panels[LIST_PANEL].show()
+#               state = 60
 
             elif key == '':
-                current_project_next()
-                projects_adjustment = refresh_project_list(stdscr,
-                                                           windows[PROJ_PANEL],
-                                                           projects_adjustment)
+                windows[PROJ_PANEL].next_project()
+                windows[TASK_PANEL].populate()
 
-            elif key == '':
-                mode = 'list_page'
-                options = 'All Open || -: PrevPage   <space>: NextPage   q: Quit'
-                page = refresh_all_open(windows, 0)
-                panels[PROJ_PANEL].hide()
-                panels[TASK_PANEL].hide()
-                panels[LIST_PANEL].show()
-                state = 60
+#           elif key == '':
+#               mode = 'list_page'
+#               options = 'All Open || -: PrevPage   <space>: NextPage   q: Quit'
+#               page[LIST_PANEL] = refresh_all_open(windows, 0)
+#               panels[PROJ_PANEL].hide()
+#               panels[TASK_PANEL].hide()
+#               panels[LIST_PANEL].show()
+#               state = 60
 
             elif key == '':
-                current_project_prev()
-                projects_adjustment = refresh_project_list(stdscr,
-                                                           windows[PROJ_PANEL],
-                                                           projects_adjustment)
+                windows[PROJ_PANEL].prev_project()
+                windows[TASK_PANEL].populate()
 
-            elif key == '':
-                current_project = ''
-                current_task = ''
-                build_task_info()
+#           elif key == '':
+#               current_project = ''
+#               current_task = ''
+#               build_task_info()
 
-            elif key == 'o':
-                mode = 'open'
-                options = 'Open || -: PrevPage   <space>: NextPage   q: Quit'
-                page = refresh_open(windows, 0)
-                panels[PROJ_PANEL].hide()
-                panels[TASK_PANEL].hide()
-                panels[LIST_PANEL].show()
-                state = 20
+#           elif key == 'o':
+#               mode = 'open'
+#               options = 'Open || -: PrevPage   <space>: NextPage   q: Quit'
+#               page[LIST_PANEL] = refresh_open(windows, 0)
+#               panels[PROJ_PANEL].hide()
+#               panels[TASK_PANEL].hide()
+#               panels[LIST_PANEL].show()
+#               state = 20
 
-            elif key == 'D':
-                mode = 'list_page'
-                options = 'Done || -: PrevPage   <space>: NextPage   q: Quit'
-                page = refresh_done(windows, 0)
-                panels[PROJ_PANEL].hide()
-                panels[TASK_PANEL].hide()
-                panels[LIST_PANEL].show()
-                state = 30
+#           elif key == 'D':
+#               mode = 'list_page'
+#               options = 'Done || -: PrevPage   <space>: NextPage   q: Quit'
+#               page[LIST_PANEL] = refresh_done(windows, 0)
+#               panels[PROJ_PANEL].hide()
+#               panels[TASK_PANEL].hide()
+#               panels[LIST_PANEL].show()
+#               state = 30
 
             elif key == 'KEY_RESIZE' or key == curses.KEY_RESIZE:
                 if curses.is_term_resized(maxy, maxx):
                     resize_windows(stdscr, windows)
                 state = 0
 
-            elif key == 'A':
-                mode = 'list_page'
-                options = 'Active || -: PrevPage   <space>: NextPage   q: Quit'
-                page = refresh_active(windows, 0)
-                panels[PROJ_PANEL].hide()
-                panels[TASK_PANEL].hide()
-                panels[LIST_PANEL].show()
-                state = 40
+            elif key == '\n':
+                state = 0
 
-            elif key == 'S':
-                mode = 'list_page'
-                options = 'States || -: PrevPage   <space>: NextPage   q: Quit'
-                page = refresh_states(windows, 0)
-                panels[PROJ_PANEL].hide()
-                panels[TASK_PANEL].hide()
-                panels[LIST_PANEL].show()
-                state = 80
+#           elif key == 'A':
+#               mode = 'list_page'
+#               options = 'Active || -: PrevPage   <space>: NextPage   q: Quit'
+#               page[LIST_PANEL] = refresh_active(windows, 0)
+#               panels[PROJ_PANEL].hide()
+#               panels[TASK_PANEL].hide()
+#               panels[LIST_PANEL].show()
+#               state = 40
+
+#           elif key == 'S':
+#               mode = 'list_page'
+#               options = 'States || -: PrevPage   <space>: NextPage   q: Quit'
+#               page[LIST_PANEL] = refresh_states(windows, 0)
+#               panels[PROJ_PANEL].hide()
+#               panels[TASK_PANEL].hide()
+#               panels[LIST_PANEL].show()
+#               state = 80
 
             else:
-                mode = 'error'
+                mode = ERROR_MODE
                 msg = "? no such command: %s" % str(key)
-                show_error(windows[CLI_PANEL], msg, BOLD_RED_ON_BLACK)
+                windows[CLI_PANEL].set_mode(ERROR_MODE, msg)
                 state = 0
                 
-        elif state == 10:
-            if key == 'q':
-                mode = 'main'
-                options = MAIN_OPTIONS
-                panels[LIST_PANEL].hide()
-                panels[PROJ_PANEL].show()
-                panels[TASK_PANEL].show()
-                page = 0
-                state = 0
-            elif key == '-':
-                page = refresh_help(windows, page-1)
-            elif key == ' ':
-                page = refresh_help(windows, page+1)
-            else:
-                page = refresh_help(windows, page)
-                state = 10
+#       elif state == 10:
+#           if key == 'q':
+#               mode = 'main'
+#               options = MAIN_OPTIONS
+#               panels[LIST_PANEL].hide()
+#               panels[PROJ_PANEL].show()
+#               panels[TASK_PANEL].show()
+#               page[PROJ_PANEL] = 0
+#               page[TASK_PANEL] = 0
+#               state = 0
+#           elif key == '-':
+#               page[LIST_PANEL] = refresh_help(windows, page[LIST_PANEL]-1)
+#           elif key == ' ':
+#               page[LIST_PANEL] = refresh_help(windows, page[LIST_PANEL]+1)
+#           else:
+#               page[LIST_PANEL] = refresh_help(windows, page[LIST_PANEL])
+#               state = 10
 
-        elif state == 20:
-            if key == 'q':
-                mode = 'main'
-                options = MAIN_OPTIONS
-                panels[LIST_PANEL].hide()
-                panels[PROJ_PANEL].show()
-                panels[TASK_PANEL].show()
-                page = 0
-                state = 0
-            elif key == '-':
-                page = refresh_open(windows, page-1)
-            elif key == ' ':
-                page = refresh_open(windows, page+1)
-            else:
-                page = refresh_open(windows, page)
-                state = 20
+#       elif state == 20:
+#           if key == 'q':
+#               mode = 'main'
+#               options = MAIN_OPTIONS
+#               panels[LIST_PANEL].hide()
+#               panels[PROJ_PANEL].show()
+#               panels[TASK_PANEL].show()
+#               page[PROJ_PANEL] = 0
+#               page[TASK_PANEL] = 0
+#               state = 0
+#           elif key == '-':
+#               page[LIST_PANEL] = refresh_open(windows, page[LIST_PANEL]-1)
+#           elif key == ' ':
+#               page[LIST_PANEL] = refresh_open(windows, page[LIST_PANEL]+1)
+#           else:
+#               page[LIST_PANEL] = refresh_open(windows, page[LIST_PANEL])
+#               state = 20
 
-        elif state == 30:
-            if key == 'q':
-                mode = 'main'
-                options = MAIN_OPTIONS
-                panels[LIST_PANEL].hide()
-                panels[PROJ_PANEL].show()
-                panels[TASK_PANEL].show()
-                page = 0
-                state = 0
-            elif key == '-':
-                page = refresh_done(windows, page-1)
-            elif key == ' ':
-                page = refresh_done(windows, page+1)
-            else:
-                page = refresh_done(windows, page)
-                state = 30
+#       elif state == 30:
+#           if key == 'q':
+#               mode = 'main'
+#               options = MAIN_OPTIONS
+#               panels[LIST_PANEL].hide()
+#               panels[PROJ_PANEL].show()
+#               panels[TASK_PANEL].show()
+#               page[PROJ_PANEL] = 0
+#               page[TASK_PANEL] = 0
+#               page = 0
+#               state = 0
+#           elif key == '-':
+#               page[LIST_PANEL] = refresh_done(windows, page[LIST_PANEL]-1)
+#           elif key == ' ':
+#               page[LIST_PANEL] = refresh_done(windows, page[LIST_PANEL]+1)
+#           else:
+#               page[LIST_PANEL] = refresh_done(windows, page[LIST_PANEL])
+#               state = 30
 
-        elif state == 40:
-            if key == 'q':
-                mode = 'main'
-                options = MAIN_OPTIONS
-                panels[LIST_PANEL].hide()
-                panels[PROJ_PANEL].show()
-                panels[TASK_PANEL].show()
-                page = 0
-                state = 0
-            elif key == '-':
-                page = refresh_active(windows, page-1)
-            elif key == ' ':
-                page = refresh_active(windows, page+1)
-            else:
-                page = refresh_active(windows, page)
-                state = 40
+#       elif state == 40:
+#           if key == 'q':
+#               mode = 'main'
+#               options = MAIN_OPTIONS
+#               panels[LIST_PANEL].hide()
+#               panels[PROJ_PANEL].show()
+#               panels[TASK_PANEL].show()
+#               page[PROJ_PANEL] = 0
+#               page[TASK_PANEL] = 0
+#               page = 0
+#               state = 0
+#           elif key == '-':
+#               page[LIST_PANEL] = refresh_active(windows, page[LIST_PANEL]-1)
+#           elif key == ' ':
+#               page[LIST_PANEL] = refresh_active(windows, page[LIST_PANEL]+1)
+#           else:
+#               page[LIST_PANEL] = refresh_active(windows, page[LIST_PANEL])
+#               state = 40
 
-        elif state == 50:
-            if key == 'q':
-                mode = 'main'
-                options = MAIN_OPTIONS
-                panels[LIST_PANEL].hide()
-                panels[PROJ_PANEL].show()
-                panels[TASK_PANEL].show()
-                page = 0
-                state = 0
-            elif key == '-':
-                page = refresh_all(windows, page-1)
-            elif key == ' ':
-                page = refresh_all(windows, page+1)
-            else:
-                page = refresh_all(windows, page)
-                state = 50
+#       elif state == 50:
+#           if key == 'q':
+#               mode = 'main'
+#               options = MAIN_OPTIONS
+#               panels[LIST_PANEL].hide()
+#               panels[PROJ_PANEL].show()
+#               panels[TASK_PANEL].show()
+#               page[PROJ_PANEL] = 0
+#               page[TASK_PANEL] = 0
+#               page = 0
+#               state = 0
+#           elif key == '-':
+#               page[LIST_PANEL] = refresh_all(windows, page[LIST_PANEL]-1)
+#           elif key == ' ':
+#               page[LIST_PANEL] = refresh_all(windows, page[LIST_PANEL]+1)
+#           else:
+#               page[LIST_PANEL] = refresh_all(windows, page[LIST_PANEL])
+#               state = 50
 
-        elif state == 60:
-            if key == 'q':
-                mode = 'main'
-                options = MAIN_OPTIONS
-                panels[LIST_PANEL].hide()
-                panels[PROJ_PANEL].show()
-                panels[TASK_PANEL].show()
-                page = 0
-                state = 0
-            elif key == '-':
-                page = refresh_deleted(windows, page-1)
-            elif key == ' ':
-                page = refresh_deleted(windows, page+1)
-            else:
-                page = refresh_deleted(windows, page)
-                state = 60
+#       elif state == 60:
+#           if key == 'q':
+#               mode = 'main'
+#               options = MAIN_OPTIONS
+#               panels[LIST_PANEL].hide()
+#               panels[PROJ_PANEL].show()
+#               panels[TASK_PANEL].show()
+#               page[PROJ_PANEL] = 0
+#               page[TASK_PANEL] = 0
+#               page = 0
+#               state = 0
+#           elif key == '-':
+#               page[LIST_PANEL] = refresh_deleted(windows, page[LIST_PANEL]-1)
+#           elif key == ' ':
+#               page[LIST_PANEL] = refresh_deleted(windows, page[LIST_PANEL]+1)
+#           else:
+#               page[LIST_PANEL] = refresh_deleted(windows, page[LIST_PANEL])
+#               state = 60
 
-        elif state == 70:
-            if key == 'q':
-                mode = 'main'
-                options = MAIN_OPTIONS
-                panels[LIST_PANEL].hide()
-                panels[PROJ_PANEL].show()
-                panels[TASK_PANEL].show()
-                page = 0
-                state = 0
-            elif key == '-':
-                page = refresh_all_open(windows, page-1)
-            elif key == ' ':
-                page = refresh_all_open(windows, page+1)
-            else:
-                page = refresh_all_open(windows, page)
-                state = 70
+#       elif state == 70:
+#           if key == 'q':
+#               mode = 'main'
+#               options = MAIN_OPTIONS
+#               panels[LIST_PANEL].hide()
+#               panels[PROJ_PANEL].show()
+#               panels[TASK_PANEL].show()
+#               page[PROJ_PANEL] = 0
+#               page[TASK_PANEL] = 0
+#               page = 0
+#               state = 0
+#           elif key == '-':
+#               page[LIST_PANEL] = refresh_all_open(windows, page[LIST_PANEL]-1)
+#           elif key == ' ':
+#               page[LIST_PANEL] = refresh_all_open(windows, page[LIST_PANEL]+1)
+#           else:
+#               page[LIST_PANEL] = refresh_all_open(windows, page[LIST_PANEL])
+#               state = 70
 
-        elif state == 80:
-            if key == 'q':
-                mode = 'main'
-                options = MAIN_OPTIONS
-                panels[LIST_PANEL].hide()
-                panels[PROJ_PANEL].show()
-                panels[TASK_PANEL].show()
-                page = 0
-                state = 0
-            elif key == '-':
-                page = refresh_states(windows, page-1)
-            elif key == ' ':
-                page = refresh_states(windows, page+1)
-            else:
-                page = refresh_states(windows, page)
-                state = 80
+#       elif state == 80:
+#           if key == 'q':
+#               mode = 'main'
+#               options = MAIN_OPTIONS
+#               panels[LIST_PANEL].hide()
+#               panels[PROJ_PANEL].show()
+#               panels[TASK_PANEL].show()
+#               page[PROJ_PANEL] = 0
+#               page[TASK_PANEL] = 0
+#               page = 0
+#               state = 0
+#           elif key == '-':
+#               page[LIST_PANEL] = refresh_states(windows, page[LIST_PANEL]-1)
+#           elif key == ' ':
+#               page[LIST_PANEL] = refresh_states(windows, page[LIST_PANEL]+1)
+#           else:
+#               page[LIST_PANEL] = refresh_states(windows, page[LIST_PANEL])
+#               state = 80
 
     return
 
 #-- link to main
 def dbsui_main():
+    global DBG
+
     DBG = Debug()
     curses.wrapper(dbsui)
     DBG.done()
