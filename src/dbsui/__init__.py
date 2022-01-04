@@ -457,7 +457,7 @@ class DbsList(DbsPanel):
         global current_project
         global DBG
 
-        if mode not in [HELP_MODE]:
+        if mode not in [HELP_MODE, TASK_LIST_MODE]:
             self.current_index = 0
             self.current_page = 0
             return
@@ -1853,7 +1853,11 @@ def dbsui(stdscr):
             else:
                 prev_mode = mode
                 mode = ERROR_MODE
-                windows[HEADER_PANEL].set_mode(ERROR_MODE, text=HELP_OPTIONS)
+                if prev_mode == HELP_MODE:
+                    msg = HELP_OPTIONS
+                elif prev_mode == TASK_LIST_MODE:
+                    msg = TASK_LIST_OPTIONS
+                windows[HEADER_PANEL].set_mode(ERROR_MODE, text=msg)
                 msg = "? no such command: %s" % str(key)
                 windows[CLI_PANEL].set_mode(ERROR_MODE, text=msg)
                 state = 10
