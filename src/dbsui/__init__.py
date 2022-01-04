@@ -68,8 +68,10 @@ TASK_PANEL    = 'tsk'
 TRAILER_PANEL = 'trlr'
 
 MAIN_OPTIONS         = 'DBS || q: Quit   o: Open   ?: Help'
-HELP_OPTIONS         = 'Help || j: NextLine   k: PrevLine   q: Quit'
-TASK_LIST_OPTIONS    = 'Tasks || j: NextLine   k: PrevLine   q: Quit'
+HELP_OPTIONS = \
+   'Help || j: NextLine   k: PrevLine  PgUp: Page Up  PgDn: Page Down   q: Quit'
+TASK_LIST_OPTIONS = \
+  'Tasks || j: NextLine   k: PrevLine  PgUp: Page Up  PgDn: Page Down   q: Quit'
 VERSION_OPTIONS      = 'dbsui, v' + dbs_task.VERSION + ' '
 
 DBG = None
@@ -177,6 +179,45 @@ class DbsPanel:
             self.current_page = 0
 
         DBG.write('prev: index %d, page %d, height %d' %
+                  (self.current_index, self.current_page, self.page_height))
+        return
+
+    def next_page(self):
+        global DBG
+
+        # go to next page of content
+        self.current_index += self.page_height
+        if self.current_index > len(self.content) - 1:
+            self.current_index = len(self.content) - 1
+
+        # move down one line, page if needed
+        last_line = ((self.current_page + 1) * self.page_height) - 1
+        if self.current_index >= last_line:
+            self.current_page += 1
+        maxpage = len(self.content) / self.page_height
+        if self.current_page > maxpage:
+            self.current_page = maxpage
+
+        DBG.write('next_page: index %d, page %d, height %d' %
+                  (self.current_index, self.current_page, self.page_height))
+        return
+
+    def prev_page(self):
+        global DBG
+
+        # go to previous page of content
+        self.current_index -= self.page_height
+        if self.current_index < 0:
+            self.current_index = 0
+
+        # move up one line, page if needed
+        first_line = (self.current_page * self.page_height) - 1
+        if self.current_index < first_line:
+            self.current_page -= 1
+        if self.current_page < 0:
+            self.current_page = 0
+
+        DBG.write('prev_page: index %d, page %d, height %d' %
                   (self.current_index, self.current_page, self.page_height))
         return
 
@@ -1083,6 +1124,12 @@ def help_KEY_DOWN():
 def help_KEY_UP():
     return ('<up arrow>', "Previous task")
 
+def help_PAGE_DOWN():
+    return ('<PgDn>', "Next page")
+
+def help_PAGE_UP():
+    return ('<PgUp>', "Previous page")
+
 def basic_counts():
     global ALL_TASKS, ALL_PROJECTS
 
@@ -1323,27 +1370,6 @@ def refresh_list(screen, win, lines):
 def help_help():
     return ('?', "help (show this list)")
     
-def help_p00():
-    return ('p00', 'just some command text p00')
-def help_p01():
-    return ('p01', 'just some command text p01')
-def help_p02():
-    return ('p02', 'just some command text p02')
-def help_p03():
-    return ('p03', 'just some command text p03')
-def help_p04():
-    return ('p04', 'just some command text p04')
-def help_p05():
-    return ('p05', 'just some command text p05')
-def help_p06():
-    return ('p06', 'just some command text p06')
-def help_p07():
-    return ('p07', 'just some command text p07')
-def help_p08():
-    return ('p08', 'just some command text p08')
-def help_p09():
-    return ('p09', 'just some command text p09')
-    
 def help_cb(win, maxx, linenum, line):
     info = line.split('\t')
     win.addstr(linenum, 0, info[0], BOLD_PLAIN_TEXT)
@@ -1392,11 +1418,9 @@ def refresh_open(windows, page):
 def help_D():
     return ('D', "List all done tasks")
 
-def refresh_done(windows, page):
+def refresh_done_task_list():
     global ALL_TASKS, current_project
 
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
     task_list = collections.OrderedDict()
     for ii in ALL_TASKS:
         t = ALL_TASKS[ii]
@@ -1407,23 +1431,22 @@ def refresh_done(windows, page):
     tlines = []
     for ii in sorted(task_list):
         t = task_list[ii]
-        info = '%4.4s\t' % t.get_name()
-        info += '%7.7s\t' % t.get_project()
+        info = '%4.4s  ' % t.get_name()
+        info += '%7.7s  ' % t.get_project()
         if t.note_count() > 0:
-            info += '[%.2d]\t' % t.note_count()
+            info += '[%.2d]  ' % t.note_count()
         else:
-            info += '     \t'
-        info += '%1s\t' % t.get_priority()
+            info += '       '
+        info += '%1s  ' % t.get_priority()
         info += '%s' % t.get_task()
         tlines.append(info)
 
-    page = show_page(win, trailer, 'List of Tasks Done', page, tlines, all_cb)
-    return page
+    return sorted(tlines)
 
 def help_A():
     return ('A', "List all active tasks")
 
-def refresh_task_list():
+def refresh_active_task_list():
     global ALL_TASKS, current_project
 
     task_list = collections.OrderedDict()
@@ -1796,19 +1819,22 @@ def dbsui(stdscr):
                 windows[TASK_PANEL].hide()
                 windows[LIST_PANEL].set_mode(TASK_LIST_MODE,
                                              text=TASK_LIST_OPTIONS)
-                windows[LIST_PANEL].set_content(refresh_task_list())
+                windows[LIST_PANEL].set_content(refresh_active_task_list())
                 windows[LIST_PANEL].refresh(TASK_LIST_MODE)
                 windows[LIST_PANEL].show()
                 state = 10
 
-#           elif key == 'D':
-#               mode = 'list_page'
-#               options = 'Done || -: PrevPage   <space>: NextPage   q: Quit'
-#               page[LIST_PANEL] = refresh_done(windows, 0)
-#               panels[PROJ_PANEL].hide()
-#               panels[TASK_PANEL].hide()
-#               panels[LIST_PANEL].show()
-#               state = 30
+            elif key == 'D':
+                prev_mode = mode
+                mode = TASK_LIST_MODE
+                windows[PROJ_PANEL].hide()
+                windows[TASK_PANEL].hide()
+                windows[LIST_PANEL].set_mode(TASK_LIST_MODE,
+                                             text=TASK_LIST_OPTIONS)
+                windows[LIST_PANEL].set_content(refresh_done_task_list())
+                windows[LIST_PANEL].refresh(TASK_LIST_MODE)
+                windows[LIST_PANEL].show()
+                state = 10
 
             elif key == 'KEY_RESIZE' or key == curses.KEY_RESIZE:
                 if curses.is_term_resized(maxy, maxx):
@@ -1816,6 +1842,14 @@ def dbsui(stdscr):
                 state = 0
 
             elif key == '\n':
+                state = 0
+
+            elif str(key) == 'KEY_NPAGE':
+                windows[TASK_PANEL].next_page()
+                state = 0
+
+            elif str(key) == 'KEY_PPAGE':
+                windows[TASK_PANEL].prev_page()
                 state = 0
 
 #           elif key == 'S':
@@ -1850,6 +1884,10 @@ def dbsui(stdscr):
             elif key == 'KEY_RESIZE' or key == curses.KEY_RESIZE:
                 if curses.is_term_resized(maxy, maxx):
                     resize_windows(stdscr, windows)
+            elif str(key) == 'KEY_NPAGE':
+                windows[LIST_PANEL].next_page()
+            elif str(key) == 'KEY_PPAGE':
+                windows[LIST_PANEL].prev_page()
             else:
                 prev_mode = mode
                 mode = ERROR_MODE
