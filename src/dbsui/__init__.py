@@ -34,6 +34,7 @@ ALL_TASKS = collections.OrderedDict()
 
 current_project = ''
 current_task = ''
+current_line = ''
 
 BOLD_BLUE_ON_BLACK = None
 BOLD_GREEN_ON_BLACK = None
@@ -53,9 +54,11 @@ HIGH = 'h'
 MEDIUM = 'm'
 LOW = 'l'
 
-MAIN_MODE = 'main'
-VERSION_MODE = 'version'
 ERROR_MODE = 'error'
+MAIN_MODE = 'main'
+HELP_MODE = 'help'
+TASK_LIST_MODE = 'task_list'
+VERSION_MODE = 'version'
 
 CLI_PANEL     = 'cli'
 HEADER_PANEL  = 'hdr'
@@ -64,7 +67,10 @@ PROJ_PANEL    = 'prj'
 TASK_PANEL    = 'tsk'
 TRAILER_PANEL = 'trlr'
 
-MAIN_OPTIONS = 'DBS || q: Quit   o: Open   ?: Help'
+MAIN_OPTIONS         = 'DBS || q: Quit   o: Open   ?: Help'
+HELP_OPTIONS         = 'Help || j: NextLine   k: PrevLine   q: Quit'
+TASK_LIST_OPTIONS    = 'Tasks || j: NextLine   k: PrevLine   q: Quit'
+VERSION_OPTIONS      = 'dbsui, v' + dbs_task.VERSION + ' '
 
 DBG = None
 PROJECT_WIDTH = 20
@@ -82,12 +88,18 @@ class DbsPanel:
         self.content_cb = content_cb
         self.content = []
 
-        self.current_mode = MAIN_MODE
-        self.modes = { MAIN_MODE: ''}
+        self.mode = MAIN_MODE
+        self.modes = { MAIN_MODE: '',
+                       HELP_MODE: '',
+                       VERSION_MODE: '',
+                       ERROR_MODE: '',
+                       TASK_LIST_MODE: '',
+                     }
 
         self.screen = screen
         self.window = None
         self.panel = None
+        self.hidden = False
         return
     
     def create(self):
@@ -108,7 +120,7 @@ class DbsPanel:
         self.panel = curses.panel.new_panel(self.window)
         DBG.write('%s: h,w,y,x: %d, %d, %d, %d' % 
                   (self.name, height, width, y, x))
-        self.window.erase()
+        self.window.clear()
         self.page_height = height
         return
 
@@ -119,11 +131,13 @@ class DbsPanel:
 
     def hide(self):
         # hide the window and content
+        self.hidden = True
         self.panel.hide()
         return
 
     def show(self):
         # show the window and content
+        self.hidden = False
         self.panel.show()
         return
 
@@ -166,12 +180,14 @@ class DbsPanel:
                   (self.current_index, self.current_page, self.page_height))
         return
 
-    def set_mode(self, mode, text):
-        self.modes[mode] = text
+    def set_mode(self, mode, text = ''):
+        self.mode = mode
+        if text:
+            self.modes[mode] = text
         return
 
     def get_mode(self):
-        return self.current_mode
+        return self.mode
     
     def resize(self, screen):
         del self.panel
@@ -183,7 +199,12 @@ class DbsPanel:
 class DbsHeader(DbsPanel):
     def __init__(self, name, screen, content_cb):
         super(DbsHeader, self).__init__(name, screen, content_cb)
-        self.modes = { MAIN_MODE: MAIN_OPTIONS }
+        self.modes = { MAIN_MODE: MAIN_OPTIONS,
+                       HELP_MODE: HELP_OPTIONS,
+                       VERSION_MODE: MAIN_OPTIONS,
+                       ERROR_MODE: MAIN_OPTIONS,
+                       TASK_LIST_MODE: TASK_LIST_OPTIONS,
+                     }
         self.create()
         return
 
@@ -192,11 +213,19 @@ class DbsHeader(DbsPanel):
         super(DbsHeader, self).create_win(1, maxx, 0, 0)
         return
 
+    def hide(self):
+        # disabled for this panel
+        return
+
+    def show(self):
+        # disabled for this panel
+        return
+
     def refresh(self, mode):
         self.mode = mode
-        if mode != MAIN_MODE:
-            self.mode = MAIN_MODE
-        self.content_cb(self.screen, self.window, self.modes[self.current_mode])
+        self.content_cb(self.screen, self.window, self.modes[self.mode])
+        DBG.write('DbsHeader.refresh: mode, msg = %s, "%s"' %
+                  (self.mode, self.modes[self.mode]))
         return
 
 
@@ -204,7 +233,6 @@ class DbsTrailer(DbsPanel):
     def __init__(self, name, screen, content_cb):
         super(DbsTrailer, self).__init__(name, screen, content_cb)
         self.mode = MAIN_MODE
-        self.options = { MAIN_MODE: '' }
         self.create()
         return
 
@@ -215,9 +243,15 @@ class DbsTrailer(DbsPanel):
 
     def refresh(self, mode):
         self.mode = mode
-        if mode != MAIN_MODE:
-            self.mode = MAIN_MODE
-        self.content_cb(self.screen, self.window, self.options[self.mode])
+        self.content_cb(self.screen, self.window, self.modes[self.mode])
+        return
+
+    def hide(self):
+        # disabled for this panel
+        return
+
+    def show(self):
+        # disabled for this panel
         return
 
 
@@ -225,10 +259,7 @@ class DbsCli(DbsPanel):
     def __init__(self, name, screen, content_cb):
         super(DbsCli, self).__init__(name, screen, content_cb)
         self.mode = MAIN_MODE
-        self.options = { MAIN_MODE: '',
-                         VERSION_MODE:  'dbsui, v' + dbs_task.VERSION + ' ',
-                         ERROR_MODE: '',
-                       }
+        self.set_mode(VERSION_MODE, VERSION_OPTIONS)
         self.create()
         return
 
@@ -239,7 +270,15 @@ class DbsCli(DbsPanel):
 
     def refresh(self, mode):
         self.mode = mode
-        self.content_cb(self.screen, self.window, self.options[self.mode])
+        self.content_cb(self.screen, self.window, self.modes[self.mode])
+        return
+
+    def hide(self):
+        # disabled for this panel
+        return
+
+    def show(self):
+        # disabled for this panel
         return
 
 
@@ -247,7 +286,6 @@ class DbsProjects(DbsPanel):
     def __init__(self, name, screen, content_cb):
         super(DbsProjects, self).__init__(name, screen, content_cb)
         self.mode = MAIN_MODE
-        self.options = { MAIN_MODE: '', }
         self.create()
         self.current_project = ''
         self.populate()
@@ -261,12 +299,13 @@ class DbsProjects(DbsPanel):
         return
 
     def refresh(self, mode):
-        global current_project
+        global current_project, current_task
         global DBG
 
+        if self.hidden:
+            return
+
         self.mode = mode
-        if mode != MAIN_MODE:
-            self.mode = MAIN_MODE
         start = self.current_page * (self.page_height - 1)
         plist = self.content[start:]
         DBG.write('DbsProject::refresh: "%s", first, last = %d, %d' %
@@ -320,7 +359,6 @@ class DbsTasks(DbsPanel):
     def __init__(self, name, screen, content_cb):
         super(DbsTasks, self).__init__(name, screen, content_cb)
         self.mode = MAIN_MODE
-        self.options = { MAIN_MODE: '', }
         self.create()
         self.current_task = ''
         self.populate()
@@ -338,9 +376,13 @@ class DbsTasks(DbsPanel):
         global current_task
         global DBG
 
+        if self.hidden:
+            self.current_index = 0
+            self.current_page = 0
+            current_task = self.content[self.current_index].split('\t')[0]
+            return
+
         self.mode = mode
-        if mode != MAIN_MODE:
-            self.mode = MAIN_MODE
         start = self.current_page * (self.page_height - 1)
         plist = self.content[start:]
         DBG.write('DbsTasks::refresh: first, last, height = %d, %d, %d' %
@@ -389,6 +431,73 @@ class DbsTasks(DbsPanel):
         self.prev()
         self.current_task = self.content[self.current_index].split('\t')[0]
         current_task = self.current_task
+
+        return
+
+
+class DbsList(DbsPanel):
+    def __init__(self, name, screen, content_cb):
+        super(DbsList, self).__init__(name, screen, content_cb)
+        self.mode = MAIN_MODE
+        self.set_mode(HELP_MODE, HELP_OPTIONS)
+        self.create()
+        self.current_project = ''
+        self.populate()
+        return
+
+    def create(self):
+        maxy, maxx = self.screen.getmaxyx()
+        self.page_height = maxy - 2
+        width = maxx - 1
+        self.page_width = width
+        super(DbsList, self).create_win(self.page_height, width, 1, 0)
+        return
+
+    def refresh(self, mode):
+        global current_project
+        global DBG
+
+        if mode not in [HELP_MODE]:
+            self.current_index = 0
+            self.current_page = 0
+            return
+
+        self.mode = mode
+        start = self.current_page * (self.page_height - 1)
+        plist = self.content[start:]
+        DBG.write('DbsList::refresh: "%s", first, last = %d, %d' %
+                  (self.mode, start, len(self.content)-1))
+        self.content_cb(self.screen, self.window, plist)
+        return
+
+    def set_content(self, clist):
+        global DBG, current_line
+
+        self.window.clear()
+        self.content = sorted(clist)
+        self.current_index = 0
+        self.current_page = 0
+        current_line = self.content[self.current_index]
+        #DBG.write('set_content: line = "%s"' % current_line)
+        #DBG.write('set_content: content\n%s' % '\n'.join(self.content))
+        return
+
+    def populate(self):
+        return
+
+    def next_line(self):
+        global current_line
+
+        self.next()
+        current_line = self.content[self.current_index]
+
+        return
+
+    def prev_line(self):
+        global current_line
+
+        self.prev()
+        current_line = self.content[self.current_index]
 
         return
 
@@ -1085,7 +1194,7 @@ def build_text_attrs():
 def refresh_header(screen, win, options):
     (sheight, swidth) = screen.getmaxyx()
     blanks = ''.ljust(swidth-1, ' ')
-    win.erase()
+    win.clear()
     win.addstr(0, 0, blanks, BOLD_WHITE_ON_BLUE)
     win.addstr(0, 0, options, BOLD_WHITE_ON_BLUE)
     return
@@ -1093,7 +1202,7 @@ def refresh_header(screen, win, options):
 def refresh_trailer(screen, win, msg):
     (height, width) = win.getmaxyx()
     dashes = ''.ljust(width-1, '-')
-    win.erase()
+    win.clear()
     win.addstr(0, 0, dashes, BOLD_WHITE_ON_BLUE)
     if msg:
         win.addstr(0, 3, msg, BOLD_WHITE_ON_BLUE)
@@ -1192,8 +1301,48 @@ def refresh_tasks(screen, win, lines):
     return
 
 
+def refresh_list(screen, win, lines):
+    global current_line
+
+    maxy, maxx = win.getmaxyx()
+    blanks = ''.ljust(maxx-1, ' ')
+    linenum = 0
+    for ii in lines:
+        attrs = PLAIN_TEXT
+        win.addstr(linenum, 0, blanks, attrs)
+        if ii == current_line:
+            attrs = BOLD_PLAIN_TEXT
+        win.addstr(linenum, 0, ii, attrs)
+        # DBG.write('refresh_list: <' + str(linenum) + '> ' + ii)
+        linenum += 1
+        if linenum >= maxy - 1:
+            return
+
+    return
+
 def help_help():
     return ('?', "help (show this list)")
+    
+def help_p00():
+    return ('p00', 'just some command text p00')
+def help_p01():
+    return ('p01', 'just some command text p01')
+def help_p02():
+    return ('p02', 'just some command text p02')
+def help_p03():
+    return ('p03', 'just some command text p03')
+def help_p04():
+    return ('p04', 'just some command text p04')
+def help_p05():
+    return ('p05', 'just some command text p05')
+def help_p06():
+    return ('p06', 'just some command text p06')
+def help_p07():
+    return ('p07', 'just some command text p07')
+def help_p08():
+    return ('p08', 'just some command text p08')
+def help_p09():
+    return ('p09', 'just some command text p09')
     
 def help_cb(win, maxx, linenum, line):
     info = line.split('\t')
@@ -1201,10 +1350,7 @@ def help_cb(win, maxx, linenum, line):
     win.addstr(linenum, 15, info[1], PLAIN_TEXT)
     return
 
-def refresh_help(windows, page):
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
-
+def refresh_help():
     CMDLIST = []
     for ii in globals().keys():
         if HELP_PREFIX.search(str(ii)):
@@ -1216,12 +1362,10 @@ def refresh_help(windows, page):
     clines = []
     for ii in sorted(cmds):
         (key, info) = globals()[ii]()
-        info = '%s\t%s' % (key, info)
+        info = '%-14s   %s' % (key, info)
         clines.append(info)
 
-    page = show_page(win, trailer, 'Command List', page, sorted(clines),
-                     help_cb)
-    return page
+    return clines
 
 def help_o():
     return ('o', "Open and display the current task")
@@ -1279,11 +1423,9 @@ def refresh_done(windows, page):
 def help_A():
     return ('A', "List all active tasks")
 
-def refresh_active(windows, page):
+def refresh_task_list():
     global ALL_TASKS, current_project
 
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
     task_list = collections.OrderedDict()
     for ii in ALL_TASKS:
         t = ALL_TASKS[ii]
@@ -1294,19 +1436,17 @@ def refresh_active(windows, page):
     tlines = []
     for ii in sorted(task_list):
         t = task_list[ii]
-        info = '%4.4s\t' % t.get_name()
-        info += '%7.7s\t' % t.get_project()
+        info = '%4.4s  ' % t.get_name()
+        info += '%7.7s  ' % t.get_project()
         if t.note_count() > 0:
-            info += '[%.2d]\t' % t.note_count()
+            info += '[%.2d]  ' % t.note_count()
         else:
-            info += '     \t'
-        info += '%1s\t' % t.get_priority()
+            info += '       '
+        info += '%1s  ' % t.get_priority()
         info += '%s' % t.get_task()
         tlines.append(info)
 
-    page = show_page(win, trailer, 'List of Active Tasks', page, tlines, 
-                     all_cb)
-    return page
+    return sorted(tlines)
 
 def help_ctrl_A():
     return ('ctrl-A', "List ALL tasks, in any state")
@@ -1547,20 +1687,28 @@ def dbsui(stdscr):
     windows[CLI_PANEL] = DbsCli(CLI_PANEL, stdscr, refresh_cli)
     windows[PROJ_PANEL] = DbsProjects(PROJ_PANEL, stdscr, refresh_projects)
     windows[TASK_PANEL] = DbsTasks(TASK_PANEL, stdscr, refresh_tasks)
+    windows[LIST_PANEL] = DbsList(LIST_PANEL, stdscr, refresh_list)
 
     state = 0
+    prev_mode = MAIN_MODE
     mode = MAIN_MODE
     while True:
         stdscr.clear()
         maxy, maxx = stdscr.getmaxyx()
 
+        DBG.write('state: %d; mode: %s' % (state, mode))
         windows[HEADER_PANEL].refresh(mode)
         windows[TRAILER_PANEL].refresh(mode)
         windows[CLI_PANEL].refresh(mode)
         windows[PROJ_PANEL].refresh(mode)
         windows[TASK_PANEL].refresh(mode)
 
-        mode = MAIN_MODE
+        if mode == ERROR_MODE:
+            windows[HEADER_PANEL].set_mode(ERROR_MODE, text=MAIN_OPTIONS)
+            mode = prev_mode
+
+        if state != 0:
+            windows[LIST_PANEL].refresh(mode)
 
         curses.panel.update_panels()
         stdscr.refresh()
@@ -1575,14 +1723,16 @@ def dbsui(stdscr):
                 mode = VERSION_MODE
                 state = 0
 
-#           elif key == '?':
-#               options = 'Help || -: PrevPage   <space>: NextPage   q: Quit'
-#               mode = 'list_page'
-#               panels[PROJ_PANEL].hide()
-#               panels[TASK_PANEL].hide()
-#               page[LIST_PANEL] = refresh_help(windows, 0)
-#               panels[LIST_PANEL].show()
-#               state = 10
+            elif key == '?':
+                prev_mode = mode
+                mode = HELP_MODE
+                windows[PROJ_PANEL].hide()
+                windows[TASK_PANEL].hide()
+                windows[LIST_PANEL].set_mode(HELP_MODE)
+                windows[LIST_PANEL].set_content(refresh_help())
+                windows[LIST_PANEL].refresh(HELP_MODE)
+                windows[LIST_PANEL].show()
+                state = 10
 
             elif key == 'j' or key == curses.KEY_DOWN:
                 windows[TASK_PANEL].next_task()
@@ -1639,6 +1789,18 @@ def dbsui(stdscr):
 #               panels[LIST_PANEL].show()
 #               state = 20
 
+            elif key == 'A':
+                prev_mode = mode
+                mode = TASK_LIST_MODE
+                windows[PROJ_PANEL].hide()
+                windows[TASK_PANEL].hide()
+                windows[LIST_PANEL].set_mode(TASK_LIST_MODE,
+                                             text=TASK_LIST_OPTIONS)
+                windows[LIST_PANEL].set_content(refresh_task_list())
+                windows[LIST_PANEL].refresh(TASK_LIST_MODE)
+                windows[LIST_PANEL].show()
+                state = 10
+
 #           elif key == 'D':
 #               mode = 'list_page'
 #               options = 'Done || -: PrevPage   <space>: NextPage   q: Quit'
@@ -1656,15 +1818,6 @@ def dbsui(stdscr):
             elif key == '\n':
                 state = 0
 
-#           elif key == 'A':
-#               mode = 'list_page'
-#               options = 'Active || -: PrevPage   <space>: NextPage   q: Quit'
-#               page[LIST_PANEL] = refresh_active(windows, 0)
-#               panels[PROJ_PANEL].hide()
-#               panels[TASK_PANEL].hide()
-#               panels[LIST_PANEL].show()
-#               state = 40
-
 #           elif key == 'S':
 #               mode = 'list_page'
 #               options = 'States || -: PrevPage   <space>: NextPage   q: Quit'
@@ -1675,28 +1828,35 @@ def dbsui(stdscr):
 #               state = 80
 
             else:
+                prev_mode = mode
                 mode = ERROR_MODE
                 msg = "? no such command: %s" % str(key)
-                windows[CLI_PANEL].set_mode(ERROR_MODE, msg)
+                windows[CLI_PANEL].set_mode(ERROR_MODE, text=msg)
                 state = 0
                 
-#       elif state == 10:
-#           if key == 'q':
-#               mode = 'main'
-#               options = MAIN_OPTIONS
-#               panels[LIST_PANEL].hide()
-#               panels[PROJ_PANEL].show()
-#               panels[TASK_PANEL].show()
-#               page[PROJ_PANEL] = 0
-#               page[TASK_PANEL] = 0
-#               state = 0
-#           elif key == '-':
-#               page[LIST_PANEL] = refresh_help(windows, page[LIST_PANEL]-1)
-#           elif key == ' ':
-#               page[LIST_PANEL] = refresh_help(windows, page[LIST_PANEL]+1)
-#           else:
-#               page[LIST_PANEL] = refresh_help(windows, page[LIST_PANEL])
-#               state = 10
+        elif state == 10:
+            if key == 'q':
+                prev_mode = mode
+                mode = MAIN_MODE
+                windows[LIST_PANEL].set_mode(MAIN_MODE)
+                windows[LIST_PANEL].hide()
+                windows[PROJ_PANEL].show()
+                windows[TASK_PANEL].show()
+                state = 0
+            elif key == 'j':
+                windows[LIST_PANEL].next_line()
+            elif key == 'k':
+                windows[LIST_PANEL].prev_line()
+            elif key == 'KEY_RESIZE' or key == curses.KEY_RESIZE:
+                if curses.is_term_resized(maxy, maxx):
+                    resize_windows(stdscr, windows)
+            else:
+                prev_mode = mode
+                mode = ERROR_MODE
+                windows[HEADER_PANEL].set_mode(ERROR_MODE, text=HELP_OPTIONS)
+                msg = "? no such command: %s" % str(key)
+                windows[CLI_PANEL].set_mode(ERROR_MODE, text=msg)
+                state = 10
 
 #       elif state == 20:
 #           if key == 'q':
