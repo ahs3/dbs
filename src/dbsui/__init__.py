@@ -159,7 +159,7 @@ class DbsPanel(DbsLine):
             self.current_index = len(self.content) - 1
 
         # move down one line, page if needed
-        last_line = ((self.current_page + 1) * self.page_height) - 1
+        last_line = ((self.current_page + 1) * (self.page_height - 1))
         if self.current_index >= last_line:
             self.current_page += 1
         maxpage = len(self.content) / self.page_height
