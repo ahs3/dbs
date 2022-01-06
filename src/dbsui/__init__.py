@@ -1059,10 +1059,10 @@ def do_up(params):
 
 #-- main
 def help_j():
-    return ('j', "Next task")
+    return ('j, <down arrow>', "Next line")
 
 def help_k():
-    return ('k', "Previous task")
+    return ('k, <up arrow>', "Previous line")
 
 def help_N():
     return ('ctrl-N', "Next project")
@@ -1074,10 +1074,10 @@ def help_R():
     return ('ctrl-R', "Refresh all project and task info")
 
 def help_KEY_DOWN():
-    return ('<down arrow>', "Next task")
+    return ('<down arrow>, j', "Next line")
 
 def help_KEY_UP():
-    return ('<up arrow>', "Previous task")
+    return ('<up arrow>, k', "Previous line")
 
 def help_PAGE_DOWN():
     return ('<PgDn>', "Next page")
@@ -1343,7 +1343,7 @@ def refresh_help():
     clines = []
     for ii in sorted(cmds):
         (key, info) = globals()[ii]()
-        info = '%-14s   %s' % (key, info)
+        info = '%-15s   %s' % (key, info)
         clines.append(info)
 
     return clines
@@ -1711,10 +1711,10 @@ def dbsui(stdscr):
                 windows[LIST_PANEL].show()
                 state = 10
 
-            elif key == 'j' or key == curses.KEY_DOWN:
+            elif key == 'j' or str(key) == 'KEY_DOWN':
                 windows[TASK_PANEL].next_task()
 
-            elif key == 'k' or key == curses.KEY_UP:
+            elif key == 'k' or str(key) == 'KEY_UP':
                 windows[TASK_PANEL].prev_task()
 
 #           elif key == '':
@@ -1735,7 +1735,7 @@ def dbsui(stdscr):
 #               panels[LIST_PANEL].show()
 #               state = 60
 
-            elif key == '':
+            elif str(key) == '^N':
                 windows[PROJ_PANEL].next_project()
                 windows[TASK_PANEL].populate()
 
@@ -1826,9 +1826,9 @@ def dbsui(stdscr):
                 windows[PROJ_PANEL].show()
                 windows[TASK_PANEL].show()
                 state = 0
-            elif key == 'j':
+            elif key == 'j' or str(key) == 'KEY_DOWN':
                 windows[LIST_PANEL].next_line()
-            elif key == 'k':
+            elif key == 'k' or str(key) == 'KEY_UP':
                 windows[LIST_PANEL].prev_line()
             elif key == 'KEY_RESIZE' or key == curses.KEY_RESIZE:
                 if curses.is_term_resized(maxy, maxx):
