@@ -18,7 +18,7 @@ clean:
 
 test-install: build
 	#pip install -i https://testpypi.org/simple/ --no-deps --upgrade dbs-todo
-	pip install --force-reinstall --no-deps --upgrade dist/dbs_todo-*-any.whl
+	pip install --user --force-reinstall --no-deps --upgrade dist/dbs_todo-*-any.whl
 
 install:
 	pip install dbs-todo
