@@ -61,10 +61,11 @@ PROJ_PANEL    = 'prj'
 TASK_PANEL    = 'tsk'
 TRAILER_PANEL = 'trlr'
 
-MAIN_HEADER         = 'DBS || q: Quit   o: Open   ?: Help'
 HELP_HEADER         = 'Help || j: NextLine   k: PrevLine  q: Quit'
 ACTIVE_TASKS_HEADER = 'Active Tasks || j: NextLine   k: PrevLine  q: Quit'
 DONE_TASKS_HEADER   = 'Done Tasks || j: NextLine   k: PrevLine  q: Quit'
+MAIN_HEADER         = 'DBS || q: Quit   o: Open   ?: Help'
+SHOW_HEADER         = 'Show Task || j: NextLine   k: PrevLine  q: Quit'
 
 VERSION_TEXT        = 'dbsui, v' + dbs_task.VERSION + ' '
 
@@ -470,7 +471,7 @@ class DbsList(DbsPanel):
         global DBG, current_line
 
         self.window.clear()
-        self.content = sorted(clist)
+        self.content = clist
         self.current_index = 0
         self.current_page = 0
         current_line = self.content[self.current_index]
@@ -1251,7 +1252,6 @@ def refresh_projects(screen, win, lines):
 
     return
 
-
 def get_current_task_list(current_project):
     global ACTIVE_PROJECTS, ALL_TASKS, ACTIVE_TASKS
     global current_task
@@ -1302,7 +1302,6 @@ def refresh_tasks(screen, win, lines):
 
     return
 
-
 def refresh_list(screen, win, lines):
     global current_line
 
@@ -1325,12 +1324,6 @@ def refresh_list(screen, win, lines):
 def help_help():
     return ('?', "help (show this list)")
     
-def help_cb(win, maxx, linenum, line):
-    info = line.split('\t')
-    win.addstr(linenum, 0, info[0], BOLD_PLAIN_TEXT)
-    win.addstr(linenum, 15, info[1], PLAIN_TEXT)
-    return
-
 def refresh_help():
     CMDLIST = []
     for ii in globals().keys():
@@ -1346,57 +1339,7 @@ def refresh_help():
         info = '%-15s   %s' % (key, info)
         clines.append(info)
 
-    return clines
-
-def help_o():
-    return ('o', "Open and display the current task")
-
-def open_cb(win, maxx, linenum, line):
-    info = line.split(':')
-    if len(info) < 2:
-        return
-    win.addstr(linenum, 0, '%s:' % info[0], BOLD_PLAIN_TEXT)
-    win.addstr(linenum, len(info[0])+1, '%s' % (' '.join(info[1:])), PLAIN_TEXT)
-    return
-
-def refresh_open(windows, page):
-    global ACTIVE_TASKS, current_task
-
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
-    tinfo = ACTIVE_TASKS[current_task].show_text()
-    tlines = tinfo.split('\n')
-
-    page = show_page(win, trailer, 'Open Task', page, tlines, open_cb)
-    return page
-
-def help_D():
-    return ('D', "List all done tasks")
-
-def refresh_done_task_list():
-    global ALL_TASKS, current_project
-
-    task_list = collections.OrderedDict()
-    for ii in ALL_TASKS:
-        t = ALL_TASKS[ii]
-        if t.get_state() == DONE:
-            if t.get_name() not in task_list:
-                task_list[t.get_name()] = t
-
-    tlines = []
-    for ii in sorted(task_list):
-        t = task_list[ii]
-        info = '%4.4s  ' % t.get_name()
-        info += '%7.7s  ' % t.get_project()
-        if t.note_count() > 0:
-            info += '[%.2d]  ' % t.note_count()
-        else:
-            info += '       '
-        info += '%1s  ' % t.get_priority()
-        info += '%s' % t.get_task()
-        tlines.append(info)
-
-    return sorted(tlines)
+    return sorted(clines)
 
 def help_A():
     return ('A', "List all active tasks")
@@ -1420,6 +1363,34 @@ def refresh_active_task_list():
             info += '[%.2d]  ' % t.note_count()
         else:
             info += '       '
+        info += '%1s  ' % t.get_priority()
+        info += '%s' % t.get_task()
+        tlines.append(info)
+
+    return sorted(tlines)
+
+def help_D():
+    return ('D', "List all done tasks")
+
+def refresh_done_task_list():
+    global ALL_TASKS, current_project
+
+    task_list = collections.OrderedDict()
+    for ii in ALL_TASKS:
+        t = ALL_TASKS[ii]
+        if t.get_state() == DONE:
+            if t.get_name() not in task_list:
+                task_list[t.get_name()] = t
+
+    tlines = []
+    for ii in sorted(task_list):
+        t = task_list[ii]
+        info = '%4.4s  ' % t.get_name()
+        info += '%7.7s  ' % t.get_project()
+        if t.note_count() > 0:
+            info += '[%.2d]  ' % t.note_count()
+        else:
+            info += '      '
         info += '%1s  ' % t.get_priority()
         info += '%s' % t.get_task()
         tlines.append(info)
@@ -1602,6 +1573,26 @@ def refresh_states(windows, page):
                      all_cb)
     return page
 
+def help_s():
+    return ('s', "Show the current task")
+
+def refresh_show():
+    global ACTIVE_TASKS, current_task
+
+    t = ACTIVE_TASKS[current_task]
+    tlines = []
+    tlines.append('Name: %s' % t.get_name())
+    tlines.append('Task: %s' % t.get_task())
+    tlines.append('State: %s' % t.get_state())
+    tlines.append('Project: %s' % t.get_project())
+    tlines.append('Priority: %s' % t.get_priority())
+    for ii in t.get_notes():
+        tlines.append('Note: %s' % ii)
+    return tlines
+
+def help_v():
+    return ('v', "Display the dbs version number")
+
 def build_windows(screen):
     global DBG
 
@@ -1693,10 +1684,6 @@ def dbsui(stdscr):
             if key == 'q' or key == curses.KEY_EXIT:
                 break
 
-            elif key == 'v':
-                windows[CLI_PANEL].set_text(VERSION_TEXT)
-                state = 0
-
             elif key == '?':
                 windows[HEADER_PANEL].set_text(HELP_HEADER)
                 windows[PROJ_PANEL].hide()
@@ -1717,6 +1704,21 @@ def dbsui(stdscr):
             elif key == 'k' or str(key) == 'KEY_UP':
                 windows[TASK_PANEL].prev_task()
 
+            elif key == 's':
+                windows[HEADER_PANEL].set_text(SHOW_HEADER)
+                windows[PROJ_PANEL].hide()
+                windows[TASK_PANEL].hide()
+                clist = refresh_show()
+                windows[LIST_PANEL].set_content(clist)
+                msg = ' show: task %s ' % current_task
+                windows[TRAILER_PANEL].set_text(msg)
+                windows[LIST_PANEL].show()
+                state = 10
+
+            elif key == 'v':
+                windows[CLI_PANEL].set_text(VERSION_TEXT)
+                state = 0
+
 #           elif key == '':
 #               mode = 'list_page'
 #               options = 'All || -: PrevPage   <space>: NextPage   q: Quit'
@@ -1735,7 +1737,7 @@ def dbsui(stdscr):
 #               panels[LIST_PANEL].show()
 #               state = 60
 
-            elif str(key) == '^N':
+            elif key == '':
                 windows[PROJ_PANEL].next_project()
                 windows[TASK_PANEL].populate()
 
