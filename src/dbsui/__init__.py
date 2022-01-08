@@ -287,6 +287,30 @@ class DbsCli(DbsPanel):
         self.content_cb(self.screen, self.window, self.text)
         return
 
+    def move_cursor(self):
+        self.window.move(0, len('Add note: '))
+        return
+
+    def get_response(self, prompt):
+        if not prompt:
+            prompt = '> '
+        win = self.window
+        win.clear()
+        curses.curs_set(2)
+        curses.echo()
+        win.move(0, 0)
+        win.addstr(0, 0, prompt, BOLD_RED_ON_BLACK)
+        win.refresh()
+
+        buf = win.getstr(0, len(prompt))
+        txt = ''
+        for ii in buf[0:]:
+            txt += chr(ii)
+
+        curses.curs_set(0)
+        curses.noecho()
+        return txt
+
 
 class DbsProjects(DbsPanel):
     def __init__(self, name, screen, content_cb):
@@ -1217,10 +1241,23 @@ def refresh_trailer(screen, win, msg):
         win.addstr(0, width-len(vers)-4, vers, BOLD_WHITE_ON_BLUE)
     return
 
+def add_task_note(note):
+    global ACTIVE_TASKS, current_task
+
+    t = ACTIVE_TASKS[current_task]
+    t.add_note(note)
+    t.write(True)
+    return
+
 def refresh_cli(screen, win, msg):
     maxy, maxx = win.getmaxyx()
     if len(msg) > 0:
-        win.addstr(0, 0, msg, BOLD_RED_ON_BLACK)
+        prefix = msg.split(':')
+        if prefix[0] == 'Add note':
+            win.addstr(0, 0, prefix[0]+': ', BOLD_RED_ON_BLACK)
+            win.addstr(0, len(prefix[0])+1, ' '.join(prefix[1:]), PLAIN_TEXT)
+        else:
+            win.addstr(0, 0, msg, BOLD_RED_ON_BLACK)
     return
 
 def refresh_projects(screen, win, lines):
@@ -1573,6 +1610,9 @@ def refresh_states(windows, page):
                      all_cb)
     return page
 
+def help_n():
+    return ('n', "Add a note to the current task")
+
 def help_s():
     return ('s', "Show the current task")
 
@@ -1639,7 +1679,7 @@ def resize_windows(stdscr, windows):
     return
 
 def dbsui(stdscr):
-    global current_project
+    global current_project, current_task
 
     windows = {}
     curses.curs_set(0)
@@ -1703,6 +1743,13 @@ def dbsui(stdscr):
 
             elif key == 'k' or str(key) == 'KEY_UP':
                 windows[TASK_PANEL].prev_task()
+
+            elif key == 'n':
+                this_task = current_task
+                response = windows[CLI_PANEL].get_response('Add note: ')
+                add_task_note(response)
+                windows[TASK_PANEL].populate()
+                current_task = this_task
 
             elif key == 's':
                 windows[HEADER_PANEL].set_text(SHOW_HEADER)
