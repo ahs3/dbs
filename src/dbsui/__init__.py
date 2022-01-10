@@ -61,14 +61,16 @@ PROJ_PANEL    = 'prj'
 TASK_PANEL    = 'tsk'
 TRAILER_PANEL = 'trlr'
 
-HELP_HEADER          = 'Help || j: NextLine   k: PrevLine  q: Quit'
-ACTIVE_TASKS_HEADER  = 'Active Tasks || j: NextLine   k: PrevLine  q: Quit'
-ALL_TASKS_HEADER     = 'All Tasks || j: NextLine   k: PrevLine  q: Quit'
-DELETED_TASKS_HEADER = 'Deleted Tasks || j: NextLine   k: PrevLine  q: Quit'
-DONE_TASKS_HEADER    = 'Done Tasks || j: NextLine   k: PrevLine  q: Quit'
-OPEN_TASKS_HEADER    = 'Open Tasks || j: NextLine   k: PrevLine  q: Quit'
-MAIN_HEADER          = 'dbs || q: Quit   s: Show Task   ?: Help'
-SHOW_HEADER          = 'Show Task || j: NextLine   k: PrevLine  q: Quit'
+ACTIVE_TASKS_TRAILER  = ' Active Tasks: %d || j: Next   k: Previous   q: Quit '
+ALL_TASKS_TRAILER     = ' All Tasks: %d || j: Next   k: Previous   q: Quit '
+DELETED_TASKS_TRAILER = ' Deleted Tasks: %d || j: Next   k: Previous   q: Quit '
+DONE_TASKS_TRAILER    = ' Done Tasks: %d || j: Next   k: Previous   q: Quit '
+HELP_HEADER           = 'Help || j: NextLine   k: PrevLine  q: Quit'
+OPEN_TASKS_TRAILER    = ' Open Tasks: %d || j: Next   k: Previous   q: Quit '
+MAIN_HEADER           = 'dbs || q: Quit   s: Show Task   ?: Help'
+SHOW_HEADER           = 'Show Task || j: NextLine   k: PrevLine  q: Quit'
+STATE_COUNTS_HEADER   = 'Project  Active  Open  Done  Deleted   Total'
+TASKS_HEADER          = 'Name  Project  Note  P  Task'
 
 VERSION_TEXT        = 'dbsui, v' + dbs_task.VERSION + ' '
 
@@ -257,6 +259,13 @@ class DbsHeader(DbsPanel):
     def refresh(self):
         self.content_cb(self.screen, self.window, self.text)
         DBG.write('DbsHeader.refresh: msg = "%s"' % (self.text))
+        return
+
+    def set_text(self, hdr, topic):
+        maxy, maxx = self.window.getmaxyx()
+        blanks = ''.ljust(maxx-1, ' ')
+        msg = hdr + blanks[0:maxx-len(topic)-len(hdr)-1]
+        self.text = msg + topic
         return
 
 
@@ -1579,37 +1588,33 @@ def refresh_open_tasks():
 def help_S():
     return ('S', "List project state counts")
 
-def refresh_states(windows, page):
-    global ALL_TASKS, current_project
+def refresh_state_counts():
+    global ALL_TASKS
 
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
-
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
-    task_list = collections.OrderedDict()
+    projects = collections.OrderedDict()
     for ii in ALL_TASKS:
         t = ALL_TASKS[ii]
-        if t.get_state() == OPEN:
-            if t.get_name() not in task_list:
-                task_list[t.get_name()] = t
+        if t.get_project() not in projects:
+            projects[t.get_project()] = { ACTIVE:0, OPEN:0,
+                                          DONE:0, DELETED:0 }
+    for ii in ALL_TASKS:
+        t = ALL_TASKS[ii]
+        projects[t.get_project()][t.get_state()] += 1
 
     tlines = []
-    for ii in sorted(task_list):
-        t = task_list[ii]
-        info = '%4.4s\t' % t.get_name()
-        info += '%7.7s\t' % t.get_project()
-        if t.note_count() > 0:
-            info += '[%.2d]\t' % t.note_count()
-        else:
-            info += '     \t'
-        info += '%1s\t' % t.get_priority()
-        info += '%s' % t.get_task()
+    for ii in sorted(projects):
+        info  = '{: <8}'.format(ii[0:8])
+        info += '  %4d' % projects[ii][ACTIVE]
+        info += '   %4d' % projects[ii][OPEN]
+        info += '  %4d' % projects[ii][DONE]
+        info += '    %4d' % projects[ii][DELETED]
+        total = 0
+        for jj in projects[ii]:
+            total += projects[ii][jj]
+        info += '    %4d' % total
         tlines.append(info)
 
-    page = show_page(win, trailer, 'List of Open Tasks', page, tlines,
-                     all_cb)
-    return page
+    return sorted(tlines)
 
 def help_n():
     return ('n', "Add a note to the current task")
@@ -1700,7 +1705,7 @@ def dbsui(stdscr):
     windows[LIST_PANEL] = DbsList(LIST_PANEL, stdscr, refresh_list)
 
     state = 0
-    windows[HEADER_PANEL].set_text(MAIN_HEADER)
+    windows[HEADER_PANEL].set_text(MAIN_HEADER, '')
     while True:
         stdscr.clear()
         maxy, maxx = stdscr.getmaxyx()
@@ -1726,7 +1731,7 @@ def dbsui(stdscr):
                 break
 
             elif key == '?':
-                windows[HEADER_PANEL].set_text(HELP_HEADER)
+                windows[HEADER_PANEL].set_text(HELP_HEADER, '')
                 windows[PROJ_PANEL].hide()
                 windows[TASK_PANEL].hide()
                 clist = refresh_help()
@@ -1753,7 +1758,7 @@ def dbsui(stdscr):
                 current_task = this_task
 
             elif key == 's':
-                windows[HEADER_PANEL].set_text(SHOW_HEADER)
+                windows[HEADER_PANEL].set_text(SHOW_HEADER, '')
                 windows[PROJ_PANEL].hide()
                 windows[TASK_PANEL].hide()
                 clist = refresh_show()
@@ -1768,23 +1773,24 @@ def dbsui(stdscr):
                 state = 0
 
             elif key == '':
-                windows[HEADER_PANEL].set_text(ALL_TASKS_HEADER)
+                windows[HEADER_PANEL].set_text(TASKS_HEADER, ' || All Tasks ')
                 windows[PROJ_PANEL].hide()
                 windows[TASK_PANEL].hide()
                 clist = refresh_all_tasks()
                 windows[LIST_PANEL].set_content(clist)
-                msg = ' total task count: %d ' % len(clist)
+                msg = ALL_TASKS_TRAILER % len(clist)
                 windows[TRAILER_PANEL].set_text(msg)
                 windows[LIST_PANEL].show()
                 state = 10
 
             elif key == '':
-                windows[HEADER_PANEL].set_text(DELETED_TASKS_HEADER)
+                windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                               ' || Deleted Tasks ')
                 windows[PROJ_PANEL].hide()
                 windows[TASK_PANEL].hide()
                 clist = refresh_deleted_tasks()
                 windows[LIST_PANEL].set_content(clist)
-                msg = ' deleted task count: %d ' % len(clist)
+                msg = DELETED_TASKS_TRAILER % len(clist)
                 windows[TRAILER_PANEL].set_text(msg)
                 windows[LIST_PANEL].show()
                 state = 10
@@ -1794,12 +1800,12 @@ def dbsui(stdscr):
                 windows[TASK_PANEL].populate()
 
             elif key == '':
-                windows[HEADER_PANEL].set_text(OPEN_TASKS_HEADER)
+                windows[HEADER_PANEL].set_text(TASKS_HEADER, ' || Open Tasks ')
                 windows[PROJ_PANEL].hide()
                 windows[TASK_PANEL].hide()
                 clist = refresh_open_tasks()
                 windows[LIST_PANEL].set_content(clist)
-                msg = ' open task count: %d ' % len(clist)
+                msg = OPEN_TASKS_TRAILER % len(clist)
                 windows[TRAILER_PANEL].set_text(msg)
                 windows[LIST_PANEL].show()
                 state = 10
@@ -1816,18 +1822,18 @@ def dbsui(stdscr):
                 windows[TASK_PANEL].populate()
 
             elif key == 'A':
-                windows[HEADER_PANEL].set_text(ACTIVE_TASKS_HEADER)
+                windows[HEADER_PANEL].set_text(TASKS_HEADER, '|| Active Tasks ')
                 windows[PROJ_PANEL].hide()
                 windows[TASK_PANEL].hide()
                 clist = refresh_active_task_list()
                 windows[LIST_PANEL].set_content(clist)
-                msg = ' tasks: %d active ' % (len(clist))
+                msg = ACTIVE_TASKS_TRAILER % (len(clist))
                 windows[TRAILER_PANEL].set_text(msg)
                 windows[LIST_PANEL].show()
                 state = 10
 
             elif key == 'D':
-                windows[HEADER_PANEL].set_text(DONE_TASKS_HEADER)
+                windows[HEADER_PANEL].set_text(TASKS_HEADER, ' || Done Tasks ')
                 windows[PROJ_PANEL].hide()
                 windows[TASK_PANEL].hide()
                 clist = refresh_done_task_list()
@@ -1853,14 +1859,17 @@ def dbsui(stdscr):
                 windows[TASK_PANEL].prev_page()
                 state = 0
 
-#           elif key == 'S':
-#               mode = 'list_page'
-#               options = 'States || -: PrevPage   <space>: NextPage   q: Quit'
-#               page[LIST_PANEL] = refresh_states(windows, 0)
-#               panels[PROJ_PANEL].hide()
-#               panels[TASK_PANEL].hide()
-#               panels[LIST_PANEL].show()
-#               state = 80
+            elif key == 'S':
+                windows[HEADER_PANEL].set_text(STATE_COUNTS_HEADER,
+                                               '  || State Counts ')
+                windows[PROJ_PANEL].hide()
+                windows[TASK_PANEL].hide()
+                clist = refresh_state_counts()
+                windows[LIST_PANEL].set_content(clist)
+                msg = ' projects: %d ' % (len(clist))
+                windows[TRAILER_PANEL].set_text(msg)
+                windows[LIST_PANEL].show()
+                state = 10
 
             else:
                 msg = "? no such command: %s" % str(key)
@@ -1869,7 +1878,7 @@ def dbsui(stdscr):
                 
         elif state == 10:
             if key == 'q':
-                windows[HEADER_PANEL].set_text(MAIN_HEADER)
+                windows[HEADER_PANEL].set_text(MAIN_HEADER, '')
                 windows[TRAILER_PANEL].set_text('')
                 windows[LIST_PANEL].hide()
                 windows[PROJ_PANEL].show()
