@@ -61,11 +61,14 @@ PROJ_PANEL    = 'prj'
 TASK_PANEL    = 'tsk'
 TRAILER_PANEL = 'trlr'
 
-HELP_HEADER         = 'Help || j: NextLine   k: PrevLine  q: Quit'
-ACTIVE_TASKS_HEADER = 'Active Tasks || j: NextLine   k: PrevLine  q: Quit'
-DONE_TASKS_HEADER   = 'Done Tasks || j: NextLine   k: PrevLine  q: Quit'
-MAIN_HEADER         = 'DBS || q: Quit   o: Open   ?: Help'
-SHOW_HEADER         = 'Show Task || j: NextLine   k: PrevLine  q: Quit'
+HELP_HEADER          = 'Help || j: NextLine   k: PrevLine  q: Quit'
+ACTIVE_TASKS_HEADER  = 'Active Tasks || j: NextLine   k: PrevLine  q: Quit'
+ALL_TASKS_HEADER     = 'All Tasks || j: NextLine   k: PrevLine  q: Quit'
+DELETED_TASKS_HEADER = 'Deleted Tasks || j: NextLine   k: PrevLine  q: Quit'
+DONE_TASKS_HEADER    = 'Done Tasks || j: NextLine   k: PrevLine  q: Quit'
+OPEN_TASKS_HEADER    = 'Open Tasks || j: NextLine   k: PrevLine  q: Quit'
+MAIN_HEADER          = 'dbs || q: Quit   s: Show Task   ?: Help'
+SHOW_HEADER          = 'Show Task || j: NextLine   k: PrevLine  q: Quit'
 
 VERSION_TEXT        = 'dbsui, v' + dbs_task.VERSION + ' '
 
@@ -133,7 +136,6 @@ class DbsPanel(DbsLine):
         # basic initialization
         super(DbsPanel, self).__init__(name, screen, content_cb)
         self.current_index = 0
-        self.current_line = 0
         self.current_page = 0
         self.page_height = 0
         self.hidden = False
@@ -180,7 +182,7 @@ class DbsPanel(DbsLine):
             self.current_index = 0
 
         # move up one line, page if needed
-        first_line = (self.current_page * self.page_height) - 1
+        first_line = (self.current_page * (self.page_height - 1))
         if self.current_index < first_line:
             self.current_page -= 1
         if self.current_page < 0:
@@ -194,15 +196,16 @@ class DbsPanel(DbsLine):
         global DBG
 
         # go to next page of content
-        self.current_index += self.page_height
+        self.current_index += (self.page_height - 1)
         if self.current_index > len(self.content) - 1:
             self.current_index = len(self.content) - 1
 
         # move down one line, page if needed
-        last_line = ((self.current_page + 1) * self.page_height) - 1
+        last_line = ((self.current_page + 1) * (self.page_height - 1))
         if self.current_index >= last_line:
             self.current_page += 1
-        maxpage = len(self.content) / self.page_height
+            self.current_index = last_line
+        maxpage = len(self.content) / (self.page_height - 1)
         if self.current_page > maxpage:
             self.current_page = maxpage
 
@@ -211,17 +214,18 @@ class DbsPanel(DbsLine):
         return
 
     def prev_page(self):
-        global DBG
+        global DBG, current_line
 
         # go to previous page of content
-        self.current_index -= self.page_height
+        self.current_index -= (self.page_height - 1)
         if self.current_index < 0:
             self.current_index = 0
 
         # move up one line, page if needed
-        first_line = (self.current_page * self.page_height) - 1
-        if self.current_index < first_line:
+        first_line = (self.current_page * (self.page_height - 1))
+        if self.current_index <= first_line:
             self.current_page -= 1
+            self.current_index = (self.current_page * (self.page_height - 1))
         if self.current_page < 0:
             self.current_page = 0
 
@@ -506,18 +510,34 @@ class DbsList(DbsPanel):
     def populate(self):
         return
 
-    def next_line(self):
+    def next(self):
         global current_line
 
-        self.next()
+        super(DbsList, self).next()
         current_line = self.content[self.current_index]
 
         return
 
-    def prev_line(self):
+    def prev(self):
         global current_line
 
-        self.prev()
+        super(DbsList, self).prev()
+        current_line = self.content[self.current_index]
+
+        return
+
+    def next_page(self):
+        global current_line
+
+        super(DbsList, self).next_page()
+        current_line = self.content[self.current_index]
+
+        return
+
+    def prev_page(self):
+        global current_line
+
+        super(DbsList, self).prev_page()
         current_line = self.content[self.current_index]
 
         return
@@ -1350,7 +1370,7 @@ def refresh_list(screen, win, lines):
         win.addstr(linenum, 0, blanks, attrs)
         if ii == current_line:
             attrs = BOLD_PLAIN_TEXT
-        win.addstr(linenum, 0, ii, attrs)
+        win.addstr(linenum, 0, ii[0:maxx-1], attrs)
         # DBG.write('refresh_list: <' + str(linenum) + '> ' + ii)
         linenum += 1
         if linenum >= maxy - 1:
@@ -1478,44 +1498,34 @@ def all_with_state_cb(win, maxx, linenum, line):
     win.addstr(linenum, 22, ' '.join(info[5:])[0:maxx-22], low_attr)
     return
 
-def refresh_all(windows, page):
-    global ALL_TASKS, current_project
-
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
+def refresh_all_tasks():
+    global ALL_TASKS
 
     tlines = []
     for ii in sorted(ALL_TASKS):
         t = ALL_TASKS[ii]
-        info = '%4.4s\t' % t.get_name()
+        info = '%4.4s  ' % t.get_name()
         if t.get_state() == DELETED:
-            info += '%1.1s\t' % 'D'
+            info += '%1.1s  ' % 'D'
         else:
-            info += '%1.1s\t' % t.get_state()[0:1]
-        info += '%7.7s\t' % t.get_project()
+            info += '%1.1s  ' % t.get_state()[0:1]
+        info += '%7.7s  ' % t.get_project()
         if t.note_count() > 0:
-            info += '[%.2d]\t' % t.note_count()
+            info += '[%.2d]  ' % t.note_count()
         else:
-            info += '     \t'
-        info += '%1s\t' % t.get_priority()
+            info += '      '
+        info += '%1s  ' % t.get_priority()
         info += '%s' % t.get_task()
         tlines.append(info)
 
-    page = show_page(win, trailer, 'List of All Tasks', page, tlines,
-                     all_with_state_cb)
-    return page
+    return sorted(tlines)
 
 def help_ctrl_D():
     return ('ctrl-D', "List all deleted tasks")
 
-def refresh_deleted(windows, page):
-    global ALL_TASKS, current_project
+def refresh_deleted_tasks():
+    global ALL_TASKS
 
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
-
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
     task_list = collections.OrderedDict()
     for ii in ALL_TASKS:
         t = ALL_TASKS[ii]
@@ -1526,31 +1536,24 @@ def refresh_deleted(windows, page):
     tlines = []
     for ii in sorted(task_list):
         t = task_list[ii]
-        info = '%4.4s\t' % t.get_name()
-        info += '%7.7s\t' % t.get_project()
+        info = '%4.4s  ' % t.get_name()
+        info += '%7.7s  ' % t.get_project()
         if t.note_count() > 0:
-            info += '[%.2d]\t' % t.note_count()
+            info += '[%.2d]  ' % t.note_count()
         else:
-            info += '     \t'
-        info += '%1s\t' % t.get_priority()
+            info += '      '
+        info += '%1s  ' % t.get_priority()
         info += '%s' % t.get_task()
         tlines.append(info)
 
-    page = show_page(win, trailer, 'List of Deleted Tasks', page, tlines,
-                     all_cb)
-    return page
+    return sorted(tlines)
 
 def help_ctrl_O():
     return ('ctrl-O', "List all open tasks")
 
-def refresh_all_open(windows, page):
-    global ALL_TASKS, current_project
+def refresh_open_tasks():
+    global ALL_TASKS
 
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
-
-    win = windows[LIST_PANEL]
-    trailer = windows[TRAILER_PANEL]
     task_list = collections.OrderedDict()
     for ii in ALL_TASKS:
         t = ALL_TASKS[ii]
@@ -1561,19 +1564,17 @@ def refresh_all_open(windows, page):
     tlines = []
     for ii in sorted(task_list):
         t = task_list[ii]
-        info = '%4.4s\t' % t.get_name()
-        info += '%7.7s\t' % t.get_project()
+        info = '%4.4s  ' % t.get_name()
+        info += '%7.7s  ' % t.get_project()
         if t.note_count() > 0:
-            info += '[%.2d]\t' % t.note_count()
+            info += '[%.2d]  ' % t.note_count()
         else:
-            info += '     \t'
-        info += '%1s\t' % t.get_priority()
+            info += '      '
+        info += '%1s  ' % t.get_priority()
         info += '%s' % t.get_task()
         tlines.append(info)
 
-    page = show_page(win, trailer, 'List of Open Tasks', page, tlines,
-                     all_cb)
-    return page
+    return sorted(tlines)
 
 def help_S():
     return ('S', "List project state counts")
@@ -1766,54 +1767,53 @@ def dbsui(stdscr):
                 windows[CLI_PANEL].set_text(VERSION_TEXT)
                 state = 0
 
-#           elif key == '':
-#               mode = 'list_page'
-#               options = 'All || -: PrevPage   <space>: NextPage   q: Quit'
-#               page[LIST_PANEL] = refresh_all(windows, 0)
-#               panels[PROJ_PANEL].hide()
-#               panels[TASK_PANEL].hide()
-#               panels[LIST_PANEL].show()
-#               state = 50
+            elif key == '':
+                windows[HEADER_PANEL].set_text(ALL_TASKS_HEADER)
+                windows[PROJ_PANEL].hide()
+                windows[TASK_PANEL].hide()
+                clist = refresh_all_tasks()
+                windows[LIST_PANEL].set_content(clist)
+                msg = ' total task count: %d ' % len(clist)
+                windows[TRAILER_PANEL].set_text(msg)
+                windows[LIST_PANEL].show()
+                state = 10
 
-#           elif key == '':
-#               mode = 'list_page'
-#               options = 'Deleted || -: PrevPage   <space>: NextPage   q: Quit'
-#               page[LIST_PANEL] = refresh_deleted(windows, 0)
-#               panels[PROJ_PANEL].hide()
-#               panels[TASK_PANEL].hide()
-#               panels[LIST_PANEL].show()
-#               state = 60
+            elif key == '':
+                windows[HEADER_PANEL].set_text(DELETED_TASKS_HEADER)
+                windows[PROJ_PANEL].hide()
+                windows[TASK_PANEL].hide()
+                clist = refresh_deleted_tasks()
+                windows[LIST_PANEL].set_content(clist)
+                msg = ' deleted task count: %d ' % len(clist)
+                windows[TRAILER_PANEL].set_text(msg)
+                windows[LIST_PANEL].show()
+                state = 10
 
             elif key == '':
                 windows[PROJ_PANEL].next_project()
                 windows[TASK_PANEL].populate()
 
-#           elif key == '':
-#               mode = 'list_page'
-#               options = 'All Open || -: PrevPage   <space>: NextPage   q: Quit'
-#               page[LIST_PANEL] = refresh_all_open(windows, 0)
-#               panels[PROJ_PANEL].hide()
-#               panels[TASK_PANEL].hide()
-#               panels[LIST_PANEL].show()
-#               state = 60
+            elif key == '':
+                windows[HEADER_PANEL].set_text(OPEN_TASKS_HEADER)
+                windows[PROJ_PANEL].hide()
+                windows[TASK_PANEL].hide()
+                clist = refresh_open_tasks()
+                windows[LIST_PANEL].set_content(clist)
+                msg = ' open task count: %d ' % len(clist)
+                windows[TRAILER_PANEL].set_text(msg)
+                windows[LIST_PANEL].show()
+                state = 10
 
             elif key == '':
                 windows[PROJ_PANEL].prev_project()
                 windows[TASK_PANEL].populate()
 
-#           elif key == '':
-#               current_project = ''
-#               current_task = ''
-#               build_task_info()
-
-#           elif key == 'o':
-#               mode = 'open'
-#               options = 'Open || -: PrevPage   <space>: NextPage   q: Quit'
-#               page[LIST_PANEL] = refresh_open(windows, 0)
-#               panels[PROJ_PANEL].hide()
-#               panels[TASK_PANEL].hide()
-#               panels[LIST_PANEL].show()
-#               state = 20
+            elif key == '':
+                current_project = ''
+                current_task = ''
+                build_task_info()
+                windows[PROJ_PANEL].populate()
+                windows[TASK_PANEL].populate()
 
             elif key == 'A':
                 windows[HEADER_PANEL].set_text(ACTIVE_TASKS_HEADER)
@@ -1876,9 +1876,9 @@ def dbsui(stdscr):
                 windows[TASK_PANEL].show()
                 state = 0
             elif key == 'j' or str(key) == 'KEY_DOWN':
-                windows[LIST_PANEL].next_line()
+                windows[LIST_PANEL].next()
             elif key == 'k' or str(key) == 'KEY_UP':
-                windows[LIST_PANEL].prev_line()
+                windows[LIST_PANEL].prev()
             elif key == 'KEY_RESIZE' or key == curses.KEY_RESIZE:
                 if curses.is_term_resized(maxy, maxx):
                     resize_windows(stdscr, windows)
@@ -1890,138 +1890,6 @@ def dbsui(stdscr):
                 msg = "? no such command: %s" % str(key)
                 windows[CLI_PANEL].set_text(msg)
                 state = 10
-
-#       elif state == 20:
-#           if key == 'q':
-#               mode = 'main'
-#               options = MAIN_OPTIONS
-#               panels[LIST_PANEL].hide()
-#               panels[PROJ_PANEL].show()
-#               panels[TASK_PANEL].show()
-#               page[PROJ_PANEL] = 0
-#               page[TASK_PANEL] = 0
-#               state = 0
-#           elif key == '-':
-#               page[LIST_PANEL] = refresh_open(windows, page[LIST_PANEL]-1)
-#           elif key == ' ':
-#               page[LIST_PANEL] = refresh_open(windows, page[LIST_PANEL]+1)
-#           else:
-#               page[LIST_PANEL] = refresh_open(windows, page[LIST_PANEL])
-#               state = 20
-
-#       elif state == 30:
-#           if key == 'q':
-#               mode = 'main'
-#               options = MAIN_OPTIONS
-#               panels[LIST_PANEL].hide()
-#               panels[PROJ_PANEL].show()
-#               panels[TASK_PANEL].show()
-#               page[PROJ_PANEL] = 0
-#               page[TASK_PANEL] = 0
-#               page = 0
-#               state = 0
-#           elif key == '-':
-#               page[LIST_PANEL] = refresh_done(windows, page[LIST_PANEL]-1)
-#           elif key == ' ':
-#               page[LIST_PANEL] = refresh_done(windows, page[LIST_PANEL]+1)
-#           else:
-#               page[LIST_PANEL] = refresh_done(windows, page[LIST_PANEL])
-#               state = 30
-
-#       elif state == 40:
-#           if key == 'q':
-#               mode = 'main'
-#               options = MAIN_OPTIONS
-#               panels[LIST_PANEL].hide()
-#               panels[PROJ_PANEL].show()
-#               panels[TASK_PANEL].show()
-#               page[PROJ_PANEL] = 0
-#               page[TASK_PANEL] = 0
-#               page = 0
-#               state = 0
-#           elif key == '-':
-#               page[LIST_PANEL] = refresh_active(windows, page[LIST_PANEL]-1)
-#           elif key == ' ':
-#               page[LIST_PANEL] = refresh_active(windows, page[LIST_PANEL]+1)
-#           else:
-#               page[LIST_PANEL] = refresh_active(windows, page[LIST_PANEL])
-#               state = 40
-
-#       elif state == 50:
-#           if key == 'q':
-#               mode = 'main'
-#               options = MAIN_OPTIONS
-#               panels[LIST_PANEL].hide()
-#               panels[PROJ_PANEL].show()
-#               panels[TASK_PANEL].show()
-#               page[PROJ_PANEL] = 0
-#               page[TASK_PANEL] = 0
-#               page = 0
-#               state = 0
-#           elif key == '-':
-#               page[LIST_PANEL] = refresh_all(windows, page[LIST_PANEL]-1)
-#           elif key == ' ':
-#               page[LIST_PANEL] = refresh_all(windows, page[LIST_PANEL]+1)
-#           else:
-#               page[LIST_PANEL] = refresh_all(windows, page[LIST_PANEL])
-#               state = 50
-
-#       elif state == 60:
-#           if key == 'q':
-#               mode = 'main'
-#               options = MAIN_OPTIONS
-#               panels[LIST_PANEL].hide()
-#               panels[PROJ_PANEL].show()
-#               panels[TASK_PANEL].show()
-#               page[PROJ_PANEL] = 0
-#               page[TASK_PANEL] = 0
-#               page = 0
-#               state = 0
-#           elif key == '-':
-#               page[LIST_PANEL] = refresh_deleted(windows, page[LIST_PANEL]-1)
-#           elif key == ' ':
-#               page[LIST_PANEL] = refresh_deleted(windows, page[LIST_PANEL]+1)
-#           else:
-#               page[LIST_PANEL] = refresh_deleted(windows, page[LIST_PANEL])
-#               state = 60
-
-#       elif state == 70:
-#           if key == 'q':
-#               mode = 'main'
-#               options = MAIN_OPTIONS
-#               panels[LIST_PANEL].hide()
-#               panels[PROJ_PANEL].show()
-#               panels[TASK_PANEL].show()
-#               page[PROJ_PANEL] = 0
-#               page[TASK_PANEL] = 0
-#               page = 0
-#               state = 0
-#           elif key == '-':
-#               page[LIST_PANEL] = refresh_all_open(windows, page[LIST_PANEL]-1)
-#           elif key == ' ':
-#               page[LIST_PANEL] = refresh_all_open(windows, page[LIST_PANEL]+1)
-#           else:
-#               page[LIST_PANEL] = refresh_all_open(windows, page[LIST_PANEL])
-#               state = 70
-
-#       elif state == 80:
-#           if key == 'q':
-#               mode = 'main'
-#               options = MAIN_OPTIONS
-#               panels[LIST_PANEL].hide()
-#               panels[PROJ_PANEL].show()
-#               panels[TASK_PANEL].show()
-#               page[PROJ_PANEL] = 0
-#               page[TASK_PANEL] = 0
-#               page = 0
-#               state = 0
-#           elif key == '-':
-#               page[LIST_PANEL] = refresh_states(windows, page[LIST_PANEL]-1)
-#           elif key == ' ':
-#               page[LIST_PANEL] = refresh_states(windows, page[LIST_PANEL]+1)
-#           else:
-#               page[LIST_PANEL] = refresh_states(windows, page[LIST_PANEL])
-#               state = 80
 
     return
 
