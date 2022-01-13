@@ -20,6 +20,7 @@ import os.path
 import pathlib
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -258,7 +259,7 @@ class DbsHeader(DbsPanel):
 
     def refresh(self):
         self.content_cb(self.screen, self.window, self.text)
-        DBG.write('DbsHeader.refresh: msg = "%s"' % (self.text))
+        DBG.write('DbsHeader.refresh: msg = "%s"' % (self.text.strip()))
         return
 
     def set_text(self, hdr, topic):
@@ -305,6 +306,8 @@ class DbsCli(DbsPanel):
         return
 
     def get_response(self, prompt):
+        global DBG
+
         if not prompt:
             prompt = '> '
         win = self.window
@@ -1616,6 +1619,46 @@ def refresh_state_counts():
 
     return sorted(tlines)
 
+def help_e():
+    return ('e', "Edit the current task")
+
+def edit_task(task_name):
+    global DBG, ALL_TASKS
+
+    ret = ''
+    t = ALL_TASKS[task_name]
+    DBG.write('edit_task: %s' % task_name)
+
+    # copy the file to a temporary location
+    before_edit = t.show_text()
+    tfd, tpath = tempfile.mkstemp(text=True)
+    before = bytearray()
+    before.extend(before_edit.encode())
+    os.write(tfd, before)
+    os.fsync(tfd)
+
+    # pop the editor onto the screen
+    editor = os.environ['EDITOR']
+    if not editor:
+        editor = 'vi'
+    result = subprocess.run([editor, tpath])
+    os.lseek(tfd, 0, 0)
+    after_edit = os.read(tfd, os.fstat(tfd).st_size)
+    os.close(tfd)
+    try:
+        os.remove(tpath)
+    except OSError:
+        pass
+
+    # verify the task content
+    # report an error if needed
+    if len(before_edit) == len(after_edit):
+        ret = 'edit: no changes made'
+
+    DBG.write('edit_task: %s (was, now) = %d, %d' %
+              (task_name, len(before_edit), len(after_edit)))
+    return ret
+
 def help_n():
     return ('n', "Add a note to the current task")
 
@@ -1685,12 +1728,13 @@ def resize_windows(stdscr, windows):
     return
 
 def dbsui(stdscr):
-    global current_project, current_task
+    global DBG, current_project, current_task, current_line
 
     windows = {}
     curses.curs_set(0)
     stdscr.clear()
     maxy, maxx = stdscr.getmaxyx()
+    ret = ''
 
     # initialize global items
     build_task_info()
@@ -1713,6 +1757,8 @@ def dbsui(stdscr):
         DBG.write('state: %d' % (state))
         windows[HEADER_PANEL].refresh()
         windows[TRAILER_PANEL].refresh()
+        if len(ret) > 0:
+            DBG.write('cli: ' + ret)
         windows[CLI_PANEL].refresh()
         windows[PROJ_PANEL].refresh()
         windows[TASK_PANEL].refresh()
@@ -1731,18 +1777,37 @@ def dbsui(stdscr):
                 break
 
             elif key == '?':
-                windows[HEADER_PANEL].set_text(HELP_HEADER, '')
-                windows[PROJ_PANEL].hide()
-                windows[TASK_PANEL].hide()
                 clist = refresh_help()
-                windows[LIST_PANEL].set_content(clist)
-                msg = ' help: %s command' % len(clist)
-                if len(clist) > 1:
-                    msg += 's'
-                msg += ' '
-                windows[TRAILER_PANEL].set_text(msg)
-                windows[LIST_PANEL].show()
+                if len(clist) > 0:
+                    windows[HEADER_PANEL].set_text(HELP_HEADER, '')
+                    windows[PROJ_PANEL].hide()
+                    windows[TASK_PANEL].hide()
+                    windows[LIST_PANEL].set_content(clist)
+                    msg = ' help: %s command' % len(clist)
+                    if len(clist) > 1:
+                        msg += 's'
+                    msg += ' '
+                    windows[TRAILER_PANEL].set_text(msg)
+                    windows[LIST_PANEL].show()
+                else:
+                    msg = '? no help info found'
+                    windows[CLI_PANEL].set_text(msg)
                 state = 10
+
+            elif key == 'e':
+                # replace the screen with and EDITOR session
+                if current_task in ALL_TASKS:
+                    prompt = 'Edit [%s]: ' % current_task
+                    response = windows[CLI_PANEL].get_response(prompt)
+                    if not response:
+                        response = current_task
+                    ret = edit_task(response)
+                    if len(ret) > 0:
+                        windows[CLI_PANEL].set_text(ret)
+                    response = ''
+                else:
+                    msg = '? no such task found: %s' % current_task
+                    windows[CLI_PANEL].set_text(msg)
 
             elif key == 'j' or str(key) == 'KEY_DOWN':
                 windows[TASK_PANEL].next_task()
@@ -1751,64 +1816,86 @@ def dbsui(stdscr):
                 windows[TASK_PANEL].prev_task()
 
             elif key == 'n':
-                this_task = current_task
-                response = windows[CLI_PANEL].get_response('Add note: ')
-                add_task_note(response)
-                windows[TASK_PANEL].populate()
-                current_task = this_task
+                if current_task not in ALL_TASKS:
+                    this_task = current_task
+                    response = windows[CLI_PANEL].get_response('Add note: ')
+                    add_task_note(response)
+                    windows[TASK_PANEL].populate()
+                    current_task = this_task
+                else:
+                    msg = '? no such task found: %s' % current_task
+                    windows[CLI_PANEL].set_text(msg)
 
             elif key == 's':
-                windows[HEADER_PANEL].set_text(SHOW_HEADER, '')
-                windows[PROJ_PANEL].hide()
-                windows[TASK_PANEL].hide()
                 clist = refresh_show()
-                windows[LIST_PANEL].set_content(clist)
-                msg = ' show: task %s ' % current_task
-                windows[TRAILER_PANEL].set_text(msg)
-                windows[LIST_PANEL].show()
-                state = 10
+                if len(clist) > 0:
+                    windows[HEADER_PANEL].set_text(SHOW_HEADER, '')
+                    windows[PROJ_PANEL].hide()
+                    windows[TASK_PANEL].hide()
+                    windows[LIST_PANEL].set_content(clist)
+                    msg = ' show: task %s ' % current_task
+                    windows[TRAILER_PANEL].set_text(msg)
+                    windows[LIST_PANEL].show()
+                    state = 10
+                else:
+                    msg = '? no task content found'
+                    windows[CLI_PANEL].set_text(msg)
 
             elif key == 'v':
                 windows[CLI_PANEL].set_text(VERSION_TEXT)
                 state = 0
 
             elif key == '':
-                windows[HEADER_PANEL].set_text(TASKS_HEADER, ' || All Tasks ')
-                windows[PROJ_PANEL].hide()
-                windows[TASK_PANEL].hide()
                 clist = refresh_all_tasks()
-                windows[LIST_PANEL].set_content(clist)
-                msg = ALL_TASKS_TRAILER % len(clist)
-                windows[TRAILER_PANEL].set_text(msg)
-                windows[LIST_PANEL].show()
-                state = 10
+                if len(clist) > 0:
+                    windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                                   ' || All Tasks ')
+                    windows[PROJ_PANEL].hide()
+                    windows[TASK_PANEL].hide()
+                    windows[LIST_PANEL].set_content(clist)
+                    msg = ALL_TASKS_TRAILER % len(clist)
+                    windows[TRAILER_PANEL].set_text(msg)
+                    windows[LIST_PANEL].show()
+                    state = 20
+                else:
+                    msg = '? no tasks found'
+                    windows[CLI_PANEL].set_text(msg)
 
             elif key == '':
-                windows[HEADER_PANEL].set_text(TASKS_HEADER,
-                                               ' || Deleted Tasks ')
-                windows[PROJ_PANEL].hide()
-                windows[TASK_PANEL].hide()
                 clist = refresh_deleted_tasks()
-                windows[LIST_PANEL].set_content(clist)
-                msg = DELETED_TASKS_TRAILER % len(clist)
-                windows[TRAILER_PANEL].set_text(msg)
-                windows[LIST_PANEL].show()
-                state = 10
+                if len(clist) > 0:
+                    windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                                   ' || Deleted Tasks ')
+                    windows[PROJ_PANEL].hide()
+                    windows[TASK_PANEL].hide()
+                    windows[LIST_PANEL].set_content(clist)
+                    msg = DELETED_TASKS_TRAILER % len(clist)
+                    windows[TRAILER_PANEL].set_text(msg)
+                    windows[LIST_PANEL].show()
+                    state = 20
+                else:
+                    msg = '? no deleted tasks'
+                    windows[CLI_PANEL].set_text(msg)
 
             elif key == '':
                 windows[PROJ_PANEL].next_project()
                 windows[TASK_PANEL].populate()
 
             elif key == '':
-                windows[HEADER_PANEL].set_text(TASKS_HEADER, ' || Open Tasks ')
-                windows[PROJ_PANEL].hide()
-                windows[TASK_PANEL].hide()
                 clist = refresh_open_tasks()
-                windows[LIST_PANEL].set_content(clist)
-                msg = OPEN_TASKS_TRAILER % len(clist)
-                windows[TRAILER_PANEL].set_text(msg)
-                windows[LIST_PANEL].show()
-                state = 10
+                if len(clist) > 0:
+                    windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                                   ' || Open Tasks ')
+                    windows[PROJ_PANEL].hide()
+                    windows[TASK_PANEL].hide()
+                    windows[LIST_PANEL].set_content(clist)
+                    msg = OPEN_TASKS_TRAILER % len(clist)
+                    windows[TRAILER_PANEL].set_text(msg)
+                    windows[LIST_PANEL].show()
+                    state = 20
+                else:
+                    msg = '? no open tasks'
+                    windows[CLI_PANEL].set_text(msg)
 
             elif key == '':
                 windows[PROJ_PANEL].prev_project()
@@ -1822,26 +1909,36 @@ def dbsui(stdscr):
                 windows[TASK_PANEL].populate()
 
             elif key == 'A':
-                windows[HEADER_PANEL].set_text(TASKS_HEADER, '|| Active Tasks ')
-                windows[PROJ_PANEL].hide()
-                windows[TASK_PANEL].hide()
                 clist = refresh_active_task_list()
-                windows[LIST_PANEL].set_content(clist)
-                msg = ACTIVE_TASKS_TRAILER % (len(clist))
-                windows[TRAILER_PANEL].set_text(msg)
-                windows[LIST_PANEL].show()
-                state = 10
+                if len(clist) > 0:
+                    windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                                   '|| Active Tasks ')
+                    windows[PROJ_PANEL].hide()
+                    windows[TASK_PANEL].hide()
+                    windows[LIST_PANEL].set_content(clist)
+                    msg = ACTIVE_TASKS_TRAILER % (len(clist))
+                    windows[TRAILER_PANEL].set_text(msg)
+                    windows[LIST_PANEL].show()
+                    state = 20
+                else:
+                    msg = '? no active tasks'
+                    windows[CLI_PANEL].set_text(msg)
 
             elif key == 'D':
-                windows[HEADER_PANEL].set_text(TASKS_HEADER, ' || Done Tasks ')
-                windows[PROJ_PANEL].hide()
-                windows[TASK_PANEL].hide()
                 clist = refresh_done_task_list()
-                windows[LIST_PANEL].set_content(clist)
-                msg = ' tasks: %d done ' % (len(clist))
-                windows[TRAILER_PANEL].set_text(msg)
-                windows[LIST_PANEL].show()
-                state = 10
+                if len(clist) > 0:
+                    windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                                   ' || Done Tasks ')
+                    windows[PROJ_PANEL].hide()
+                    windows[TASK_PANEL].hide()
+                    windows[LIST_PANEL].set_content(clist)
+                    msg = ' tasks: %d done ' % (len(clist))
+                    windows[TRAILER_PANEL].set_text(msg)
+                    windows[LIST_PANEL].show()
+                    state = 20
+                else:
+                    msg = '? no done tasks'
+                    windows[CLI_PANEL].set_text(msg)
 
             elif key == 'KEY_RESIZE' or key == curses.KEY_RESIZE:
                 if curses.is_term_resized(maxy, maxx):
@@ -1872,8 +1969,8 @@ def dbsui(stdscr):
                 state = 10
 
             else:
-                msg = "? no such command: %s" % str(key)
-                windows[CLI_PANEL].set_text(msg)
+                ret = "? no such command: %s" % str(key)
+                windows[CLI_PANEL].set_text(ret)
                 state = 0
                 
         elif state == 10:
@@ -1896,9 +1993,45 @@ def dbsui(stdscr):
             elif str(key) == 'KEY_PPAGE':
                 windows[LIST_PANEL].prev_page()
             else:
-                msg = "? no such command: %s" % str(key)
-                windows[CLI_PANEL].set_text(msg)
+                ret = "? no such command: %s" % str(key)
+                windows[CLI_PANEL].set_text(ret)
                 state = 10
+
+        elif state == 20:
+            if key == 'q':
+                windows[HEADER_PANEL].set_text(MAIN_HEADER, '')
+                windows[TRAILER_PANEL].set_text('')
+                windows[LIST_PANEL].hide()
+                windows[PROJ_PANEL].show()
+                windows[TASK_PANEL].show()
+                state = 0
+            elif key == 'e':
+                # replace the screen with and EDITOR session
+                tname = current_line.split()[0]
+                prompt = 'Edit [%s]: ' % tname
+                response = windows[CLI_PANEL].get_response(prompt)
+                if not response:
+                    response = tname
+                ret = edit_task(response)
+                if len(ret) > 0:
+                    windows[CLI_PANEL].set_text(ret)
+                response = ''
+            elif key == 'j' or str(key) == 'KEY_DOWN':
+                windows[LIST_PANEL].next()
+            elif key == 'k' or str(key) == 'KEY_UP':
+                windows[LIST_PANEL].prev()
+            elif key == 'KEY_RESIZE' or key == curses.KEY_RESIZE:
+                if curses.is_term_resized(maxy, maxx):
+                    resize_windows(stdscr, windows)
+            elif str(key) == 'KEY_NPAGE':
+                windows[LIST_PANEL].next_page()
+            elif str(key) == 'KEY_PPAGE':
+                windows[LIST_PANEL].prev_page()
+            else:
+                ret = "? no such command: %s" % str(key)
+                windows[CLI_PANEL].set_text(ret)
+                state = 20
+
 
     return
 
