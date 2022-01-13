@@ -5,6 +5,7 @@ v0.5.0:
 -- Gave in and set up proper Python packaging; really changes to tree
    structure for source files, and forces x.y.z versioning, but maybe
    useful in the long term
+-- Added an ncurses UI (dbsui) on top of CLI (dbs)
 
 v0.4.1:
 -- added "todo" command: show only the projects with open/active tasks
