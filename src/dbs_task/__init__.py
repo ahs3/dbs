@@ -33,6 +33,7 @@ ALLOWED_STATES = [ACTIVE, OPEN, DONE, DELETED]
 DAYS_LIMIT = 60
 LASTNUM = "lastnum"
 
+RE_NAME = re.compile('^Name:')
 RE_TASK = re.compile('^Task:')
 RE_STATE = re.compile('^State:')
 RE_PROJECT = re.compile('^Project:')
@@ -57,6 +58,23 @@ class Task:
         self.priority = "m"
         self.state = "open"
         self.notes = []
+
+    def validate(self, info):
+        # info needs to be an array of lines
+        ret = ''
+        linenum = 0
+        for ii in info:
+            line = ii.strip()
+            d = line.split(':')[0]
+            linenum += 1
+            if RE_NAME.search(line) or RE_TASK.search(line) or \
+               RE_STATE.search(line) or RE_PROJECT.search(line) or \
+               RE_PRIORITY.search(line) or RE_NOTE.search(line):
+                continue
+            else:
+                ret = '? unknown keyword "%s" at line %d' % (d, linenum)
+                break
+        return ret
 
     def populate(self, fname, name):
         fd = open(fname, "r")

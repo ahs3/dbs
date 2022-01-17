@@ -1651,12 +1651,15 @@ def edit_task(task_name):
         pass
 
     # verify the task content
+    after = after_edit.decode("utf-8")
+    DBG.write('edit_task: new text is:\n%s' % (after))
+    ret = t.validate(after.split('\n'))
     # report an error if needed
-    if len(before_edit) == len(after_edit):
+    if len(before_edit) == len(after_edit) and len(ret) == 0:
         ret = 'edit: no changes made'
 
-    DBG.write('edit_task: %s (was, now) = %d, %d' %
-              (task_name, len(before_edit), len(after_edit)))
+    DBG.write('edit_task: %s (was, now) = %d, %d [%s]' %
+              (task_name, len(before_edit), len(after_edit), ret))
     return ret
 
 def help_n():
