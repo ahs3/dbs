@@ -22,7 +22,7 @@ import time
 
 #-- globals
 VERSION = "0.5.0"
-YEAR = "2021"
+YEAR = "2022"
 AUTHOR = "Al Stone <ahs3@ahs3.net>"
 CONFIG = "dbsrc"
 ACTIVE = "active"
@@ -52,7 +52,7 @@ COLOR_OFF = "\033[0m"
 #-- classes
 class Task:
     def __init__(self):
-        self.name = ""
+        self.name = 0
         self.task = ""
         self.project = ""
         self.priority = "m"
@@ -65,16 +65,50 @@ class Task:
         linenum = 0
         for ii in info:
             line = ii.strip()
-            d = line.split(':')[0]
+            k = line.split(':')[0]
+            v = line.split(':')[1:].strip()
             linenum += 1
             if RE_NAME.search(line) or RE_TASK.search(line) or \
-               RE_STATE.search(line) or RE_PROJECT.search(line) or \
-               RE_PRIORITY.search(line) or RE_NOTE.search(line):
+               RE_PROJECT.search(line) or RE_NOTE.search(line):
                 continue
+            elif RE_STATE.search(line):
+                if v in ALLOWED_STATES:
+                    continue
+                else:
+                    ret = '? unknown state "%s" at line %d' % (k, linenum)
+            elif RE_PRIORITY.search(line):
+                if v in [HIGH, MEDIUM, LOW]:
+                    continue
+                else:
+                    ret = '? unknown priority "%s" at line %d' % (k, linenum)
             else:
-                ret = '? unknown keyword "%s" at line %d' % (d, linenum)
+                ret = '? unknown keyword "%s" at line %d' % (k, linenum)
                 break
         return ret
+
+    def set_fields(self, info):
+        # info needs to be an array of lines
+        ret = ''
+        linenum = 0
+
+        self.notes.clear()
+        for ii in info:
+            line = ii.strip()
+            d = ' '.join(line.split(':')[1:])
+            if RE_NAME.search(line):
+                 num = line.replace('Name:','').strip()
+                 self.name = task_canonical_name(num)
+            elif RE_TASK.search(line):
+                 self.task = line.replace('Task:','').strip()
+            elif RE_STATE.search(line):
+                 self.state = line.replace('State:','').strip()
+            elif RE_PROJECT.search(line):
+                 self.project = line.replace('Project:','').strip()
+            elif RE_PRIORITY.search(line):
+                 self.priority = line.replace('Priority:','').strip()
+            elif RE_NOTE.search(line):
+                 self.notes.append(line.replace('Note:','').strip())
+        return
 
     def populate(self, fname, name):
         fd = open(fname, "r")
@@ -82,7 +116,7 @@ class Task:
         #print(info)
         fd.close()
 
-        self.name = name
+        self.name = task_canonical_name(name)
         for ii in info:
             line = ii.strip()
             d = ' '.join(line.split(':')[1:])
@@ -99,7 +133,7 @@ class Task:
         return
 
     def set_name(self, name):
-        self.name = name
+        self.name = task_canonical_name(name)
 
     def get_name(self):
         return self.name
@@ -192,8 +226,9 @@ class Task:
         if note_cnt > 0:
             nnotes = " [%d]" % note_cnt
         info = fix_task(self.task + nnotes)
-        print("%s%-8s    %1s    %-8s  %s%s" % (color, self.name[0:7],
-              self.priority, self.project, info, COLOR_OFF))
+        print(f'{color}{int(self.name):>8}    {self.priority:1}    {self.project:<8}   {info}{COLOR_OFF}')
+        #print("%s%-8s    %1s    %-8s  %s%s" % (color, self.name[0:8],
+        #      self.priority, self.project, info, COLOR_OFF))
         return
 
     def write(self, overwrite=False):
@@ -296,11 +331,11 @@ def dbs_next():
         n = 1
     fd = open(lnumpath, "w")
     fd.seek(0)
-    lnum = "%04d" % n
+    lnum = task_canonical_name(n)
 
     while task_name_exists(lnum):
         n = n + 1
-        lnum = "%04d" % n
+        lnum = task_canonical_name(n)
 
     fd.write("%d\n" % n)
     fd.close()
@@ -309,7 +344,7 @@ def dbs_next():
 def fix_task(info):
     # munge up the task string if it's longer than one line
     # NB: all the lengths and stuff are figured out by hand
-    prefix_len = 27
+    prefix_len = 28
     cnt = len(info)
     termsize = shutil.get_terminal_size()
     avail = termsize.columns - prefix_len
@@ -329,7 +364,7 @@ def fix_task(info):
            last = ii + 1
            cnt -= ii
            if cnt > 0:
-               res += '\n' + "                           "
+               res += '\n' + "                            "
 
     return res
 
@@ -419,10 +454,17 @@ def task_name_exists(name):
     if not name:
         return None
 
+    cname = task_canonical_name(name)
     for state in [ACTIVE, OPEN, DONE, DELETED]:
         fullpath = os.path.join(dbs_repo(), state)
         for (dirpath, dirnames, filenames) in os.walk(fullpath):
-            if name in filenames:
-                return os.path.join(dbs_repo(), state, name)
+            if cname in filenames:
+                return os.path.join(dbs_repo(), state, cname)
     return None
+
+def task_canonical_name(name):
+    if not name:
+        return None
+
+    return f'{int(name):08d}'
 
