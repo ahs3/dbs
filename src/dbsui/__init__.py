@@ -1161,10 +1161,10 @@ def do_up(params):
 
 #-- task help messages
 def help_a():
-    return ('TASK', 'a', "add a new task")
+    return ('TASK', 'a', "Add a new task")
     
 def help_d():
-    return ('TASK', 'd', "mark a task done")
+    return ('TASK', 'd', "Mark a task done")
     
 def help_e():
     return ('TASK', 'e', "Edit the current task")
@@ -1227,7 +1227,7 @@ def help_v():
     return ('MISC', 'v', "Display the dbs version number")
 
 def help_help():
-    return ('MISC', '?', "help (show this list)")
+    return ('MISC', '?', "Help (show this list)")
     
 #-- helper functions
 def basic_counts():
