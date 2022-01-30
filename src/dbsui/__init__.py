@@ -71,7 +71,7 @@ OPEN_TASKS_TRAILER    = ' Open Tasks: %d || j: Next   k: Previous   q: Quit '
 MAIN_HEADER           = 'dbs || q: Quit   s: Show Task   ?: Help'
 SHOW_HEADER           = 'Show Task || j: NextLine   k: PrevLine  q: Quit'
 STATE_COUNTS_HEADER   = 'Project  Active  Open  Done  Deleted   Total'
-TASKS_HEADER          = 'Name  Project  Note  P  Task'
+TASKS_HEADER          = '--- Name  Project  Note  P  Task'
 
 VERSION_TEXT        = 'dbsui, v' + dbs_task.VERSION + ' '
 
@@ -142,6 +142,12 @@ class DbsPanel(DbsLine):
         self.current_page = 0
         self.page_height = 0
         self.hidden = False
+
+        self.previous_index = self.current_index
+        self.previous_page = self.current_page
+        self.previous_hidden = self.hidden
+        self.previous_text = self.text
+        self.previous_content = self.content
         return
     
     def hide(self):
@@ -221,8 +227,6 @@ class DbsPanel(DbsLine):
 
         # go to previous page of content
         self.current_index -= (self.page_height - 1)
-        if self.current_index < 0:
-            self.current_index = 0
 
         # move up one line, page if needed
         first_line = (self.current_page * (self.page_height - 1))
@@ -231,20 +235,29 @@ class DbsPanel(DbsLine):
             self.current_index = (self.current_page * (self.page_height - 1))
         if self.current_page < 0:
             self.current_page = 0
+        if self.current_index < 0:
+            self.current_index = 0
 
         DBG.write('prev_page: index %d, page %d, height %d' %
                   (self.current_index, self.current_page, self.page_height))
         return
 
-    def set_mode(self, mode, text = ''):
-        self.mode = mode
-        if text:
-            self.modes[mode] = text
+    def save_previous(self):
+        self.previous_index = self.current_index
+        self.previous_page = self.current_page
+        self.previous_hidden = self.hidden
+        self.previous_text = self.text
+        self.previous_content = self.content
         return
 
-    def get_mode(self):
-        return self.mode
-    
+    def restore_previous(self):
+        self.current_index = self.previous_index
+        self.current_page = self.previous_page
+        self.hidden = self.previous_hidden
+        self.text = self.previous_text
+        self.content = self.previous_content
+        return
+
 
 class DbsHeader(DbsPanel):
     def __init__(self, name, screen, content_cb):
@@ -439,7 +452,7 @@ class DbsTasks(DbsPanel):
         clist = []
         for ii in tlist:
             t = ACTIVE_TASKS[ii]
-            info = '%4.4s' % t.get_name()
+            info = '%8.8s' % t.get_name()
             if t.note_count() > 0:
                 info += '\t[%2d]' % t.note_count()
             else:
@@ -501,7 +514,9 @@ class DbsList(DbsPanel):
             return
 
         start = self.current_page * (self.page_height - 1)
-        plist = self.content[start:]
+        if start > len(self.content) - 1:
+            start = len(self.content) - 1
+        plist = self.content[int(start):]
         DBG.write('DbsList::refresh: first, last = %d, %d' %
                   (start, len(self.content)-1))
         self.content_cb(self.screen, self.window, plist)
@@ -542,7 +557,7 @@ class DbsList(DbsPanel):
         global current_line
 
         super(DbsList, self).next_page()
-        current_line = self.content[self.current_index]
+        current_line = self.content[int(self.current_index)]
 
         return
 
@@ -550,7 +565,23 @@ class DbsList(DbsPanel):
         global current_line
 
         super(DbsList, self).prev_page()
-        current_line = self.content[self.current_index]
+        current_line = self.content[int(self.current_index)]
+
+        return
+
+    def save_previous(self):
+        global current_line
+
+        super(DbsList, self).save_previous()
+        self.prev_line = current_line
+
+        return
+
+    def restore_previous(self):
+        global current_line
+
+        super(DbsList, self).restore_previous()
+        current_line = self.prev_line
 
         return
 
@@ -588,37 +619,57 @@ def do_active(params):
         os.remove(fullpath)
     return
 
-def add_help():
-    return ('add', "add open task: <name> <project> <priority> <description>")
+def help_a():
+    return ('a', "add a new task")
     
-def do_add(params):
-    task = Task()
-    if len(params) < 4:
-        print("? %s" % add_help())
-        p = ' '.join(params)
-        p.replace('[','')
-        p.replace(']','')
-        p.replace('.','')
-        print("  got: %s" % p)
-        return
+def add_task(tname):
+    global DBG, ALL_TASKS
 
-    if params[0] == 'next':
-        tname = dbs_next()
-    if task_name_exists(tname):
-        print("? a task by that name (\"%s\") already exists" % tname)
-        sys.exit(1)
+    ret = ''
+    task_name = dbs_task.task_canonical_name(tname)
+    if task_name in ALL_TASKS:
+        return ('? task %d already exists' % int(task_name))
 
-    task.set_name(tname)
-    task.set_project(params[1])
-    task.set_priority(params[2])
-    task.set_task(' '.join(params[3:]))
-    task.set_state(OPEN)
-    task.add_note("created")
+    t = Task()
+    t.set_name(task_name)
+    t.set_priority(MEDIUM)
+    t.set_state(OPEN)
+    DBG.write('add_task: %s' % task_name)
 
-    task.write()
-    task.print()
+    # copy the file to a temporary location
+    before_edit = t.show_text()
+    tfd, tpath = tempfile.mkstemp(text=True)
+    before = bytearray()
+    before.extend(before_edit.encode("utf-8"))
+    os.write(tfd, before)
+    os.fsync(tfd)
 
-    return
+    # pop the editor onto the screen
+    editor = os.environ['EDITOR']
+    if not editor:
+        editor = 'vi'
+    result = subprocess.run([editor, tpath])
+    os.lseek(tfd, 0, 0)
+    after = os.read(tfd, os.fstat(tfd).st_size)
+    os.close(tfd)
+    try:
+        os.remove(tpath)
+    except OSError:
+        pass
+
+    # verify the task content
+    after_edit = after.decode("utf-8").split('\n')[0:-1]
+    DBG.write('add_task: new text is:\n%s' % (after_edit))
+    ret = t.validate(after_edit)
+
+    # report an error if needed
+    if len(ret) == 0:
+        t.set_fields(after_edit)
+        t.add_note('added')
+        t.write()
+
+    DBG.write('add_task: %s = %d [%s]' % (task_name, len(after_edit), ret))
+    return ret
 
 def delete_help():
     return ('delete', "delete one or more tasks: <name> ...")
@@ -641,24 +692,22 @@ def do_delete(params):
 
     return
 
-def done_help():
-    return ('done', "mark one or more tasks done: <name> ...")
+def help_d():
+    return ('d', "mark a task done")
     
-def do_done(params):
-    if len(params) < 1:
-        print("? must provide at least one task name")
-        sys.exit(1)
+def mark_done(raw_task):
+    global ALL_TASKS
 
-    for ii in params:
-        t = get_task(ii)
-        if not t:
-            continue
-        fullpath = task_name_exists(ii)
+    tname = dbs_task.task_canonical_name(raw_task)
+    if tname in ALL_TASKS:
+        t = ALL_TASKS[tname]
+        fullpath = dbs_task.task_name_exists(tname)
         t.set_state(DONE)
         t.add_note("marked done")
         t.move(DONE)
-        t.print()
         os.remove(fullpath)
+    else:
+        return ('? no such task: %d' % int(raw_task))
 
     return
 
@@ -1122,13 +1171,13 @@ def help_k():
     return ('k, <up arrow>', "Previous line")
 
 def help_N():
-    return ('ctrl-N', "Next project")
+    return ('Ctrl-N', "Next project")
 
 def help_P():
-    return ('ctrl-P', "Previous project")
+    return ('Ctrl-P', "Previous project")
 
 def help_R():
-    return ('ctrl-R', "Refresh all project and task info")
+    return ('Ctrl-R', "Refresh all project and task info")
 
 def help_KEY_DOWN():
     return ('<down arrow>, j', "Next line")
@@ -1165,6 +1214,7 @@ def basic_counts():
 def build_task_info():
     global ALL_TASKS, ALL_PROJECTS
     global ACTIVE_PROJECTS
+    global current_task, current_project
 
     ALL_TASKS.clear()
     ALL_PROJECTS.clear()
@@ -1196,6 +1246,8 @@ def build_task_info():
             if ii not in ACTIVE_PROJECTS:
                 ACTIVE_PROJECTS[ii] = { ACTIVE:p[ACTIVE], OPEN:p[OPEN],
                                         HIGH:[], MEDIUM:[], LOW:[] }
+    if current_project not in ALL_PROJECTS:
+        current_project = ''
 
     # attach the active tasks to the active projects, by priority
     for ii in ALL_TASKS:
@@ -1207,6 +1259,8 @@ def build_task_info():
             ACTIVE_PROJECTS[t.get_project()][t.get_priority()].append(t)
         else:
             continue
+    if current_task not in ALL_TASKS:
+        current_task = ''
 
     return
 
@@ -1276,7 +1330,8 @@ def refresh_trailer(screen, win, msg):
 def add_task_note(note):
     global ACTIVE_TASKS, current_task
 
-    t = ACTIVE_TASKS[current_task]
+    task_name = dbs_task.task_canonical_name(current_task)
+    t = ACTIVE_TASKS[task_name]
     t.add_note(note)
     t.write(True)
     return
@@ -1361,7 +1416,7 @@ def refresh_tasks(screen, win, lines):
             attrs = BOLD_WHITE_ON_BLUE
         if tname == current_task:
             attrs = BOLD_WHITE_ON_RED
-        txt = "%5.5s  %4s  %1s  %s" % (info[0], info[1], info[2], info[3])
+        txt = "%8d  %4s  %1s  %s" % (int(info[0]), info[1], info[2], info[3])
         win.addstr(linenum, 0, blanks, attrs)
         win.addstr(linenum, 0, txt[0:maxx-1], attrs)
         # DBG.write('refresh_tasks: <' + str(linenum) + '> ' + txt[0:maxx-1])
@@ -1426,7 +1481,7 @@ def refresh_active_task_list():
     tlines = []
     for ii in sorted(task_list):
         t = task_list[ii]
-        info = '%4.4s  ' % t.get_name()
+        info = '%8d  ' % int(t.get_name())
         info += '%7.7s  ' % t.get_project()
         if t.note_count() > 0:
             info += '[%.2d]  ' % t.note_count()
@@ -1454,7 +1509,7 @@ def refresh_done_task_list():
     tlines = []
     for ii in sorted(task_list):
         t = task_list[ii]
-        info = '%4.4s  ' % t.get_name()
+        info = '%8d  ' % int(t.get_name())
         info += '%7.7s  ' % t.get_project()
         if t.note_count() > 0:
             info += '[%.2d]  ' % t.note_count()
@@ -1466,8 +1521,8 @@ def refresh_done_task_list():
 
     return sorted(tlines)
 
-def help_ctrl_A():
-    return ('ctrl-A', "List ALL tasks, in any state")
+def help_Ctrl_A():
+    return ('Ctrl-A', "List ALL tasks, in any state")
 
 def all_cb(win, maxx, linenum, line):
     info = line.split('\t')
@@ -1516,7 +1571,7 @@ def refresh_all_tasks():
     tlines = []
     for ii in sorted(ALL_TASKS):
         t = ALL_TASKS[ii]
-        info = '%4.4s  ' % t.get_name()
+        info = '%8d  ' % int(t.get_name())
         if t.get_state() == DELETED:
             info += '%1.1s  ' % 'D'
         else:
@@ -1532,8 +1587,8 @@ def refresh_all_tasks():
 
     return sorted(tlines)
 
-def help_ctrl_D():
-    return ('ctrl-D', "List all deleted tasks")
+def help_Ctrl_D():
+    return ('Ctrl-D', "List all deleted tasks")
 
 def refresh_deleted_tasks():
     global ALL_TASKS
@@ -1548,7 +1603,7 @@ def refresh_deleted_tasks():
     tlines = []
     for ii in sorted(task_list):
         t = task_list[ii]
-        info = '%4.4s  ' % t.get_name()
+        info = '%8d  ' % int(t.get_name())
         info += '%7.7s  ' % t.get_project()
         if t.note_count() > 0:
             info += '[%.2d]  ' % t.note_count()
@@ -1560,8 +1615,8 @@ def refresh_deleted_tasks():
 
     return sorted(tlines)
 
-def help_ctrl_O():
-    return ('ctrl-O', "List all open tasks")
+def help_Ctrl_O():
+    return ('Ctrl-O', "List all open tasks")
 
 def refresh_open_tasks():
     global ALL_TASKS
@@ -1576,7 +1631,7 @@ def refresh_open_tasks():
     tlines = []
     for ii in sorted(task_list):
         t = task_list[ii]
-        info = '%4.4s  ' % t.get_name()
+        info = '%8d  ' % int(t.get_name())
         info += '%7.7s  ' % t.get_project()
         if t.note_count() > 0:
             info += '[%.2d]  ' % t.note_count()
@@ -1622,10 +1677,11 @@ def refresh_state_counts():
 def help_e():
     return ('e', "Edit the current task")
 
-def edit_task(task_name):
+def edit_task(raw_name):
     global DBG, ALL_TASKS
 
     ret = ''
+    task_name = dbs_task.task_canonical_name(raw_name)
     t = ALL_TASKS[task_name]
     DBG.write('edit_task: %s' % task_name)
 
@@ -1633,7 +1689,7 @@ def edit_task(task_name):
     before_edit = t.show_text()
     tfd, tpath = tempfile.mkstemp(text=True)
     before = bytearray()
-    before.extend(before_edit.encode())
+    before.extend(before_edit.encode("utf-8"))
     os.write(tfd, before)
     os.fsync(tfd)
 
@@ -1643,7 +1699,7 @@ def edit_task(task_name):
         editor = 'vi'
     result = subprocess.run([editor, tpath])
     os.lseek(tfd, 0, 0)
-    after_edit = os.read(tfd, os.fstat(tfd).st_size)
+    after = os.read(tfd, os.fstat(tfd).st_size)
     os.close(tfd)
     try:
         os.remove(tpath)
@@ -1651,12 +1707,22 @@ def edit_task(task_name):
         pass
 
     # verify the task content
-    after = after_edit.decode("utf-8")
-    DBG.write('edit_task: new text is:\n%s' % (after))
-    ret = t.validate(after.split('\n'))
+    after_edit = after.decode("utf-8").split('\n')[0:-1]
+    DBG.write('edit_task: new text is:\n%s' % (after_edit))
+    ret = t.validate(after_edit)
     # report an error if needed
-    if len(before_edit) == len(after_edit) and len(ret) == 0:
-        ret = 'edit: no changes made'
+    if len(ret) == 0:
+        if before_edit == after_edit:
+            ret = 'edit: no changes made'
+        else:
+            old_state = t.get_state()
+            t.set_fields(after_edit)
+            t.add_note('edited')
+            if t.get_state() != old_state:
+                t.move(t.get_state())
+                dbs_task.put_task(t, True)
+            else:
+                dbs_task.put_task(t, True)
 
     DBG.write('edit_task: %s (was, now) = %d, %d [%s]' %
               (task_name, len(before_edit), len(after_edit), ret))
@@ -1669,9 +1735,9 @@ def help_s():
     return ('s', "Show the current task")
 
 def refresh_show():
-    global ACTIVE_TASKS, current_task
+    global ALL_TASKS, current_task
 
-    t = ACTIVE_TASKS[current_task]
+    t = ALL_TASKS[current_task]
     tlines = []
     tlines.append('Name: %s' % t.get_name())
     tlines.append('Task: %s' % t.get_task())
@@ -1797,19 +1863,59 @@ def dbsui(stdscr):
                     windows[CLI_PANEL].set_text(msg)
                 state = 10
 
+            elif key == 'a':
+                # replace the screen with an EDITOR session
+                raw_task = dbs_task.dbs_next()
+                tname = dbs_task.task_canonical_name(raw_task)
+                response = add_task(tname)
+                if not response:
+                    current_taks = tname
+                    build_task_info()
+                    windows[PROJ_PANEL].populate()
+                    windows[TASK_PANEL].populate()
+                    response = ''
+                else:
+                    windows[CLI_PANEL].set_text(response)
+
+            elif key == 'd':
+                task_name = dbs_task.task_canonical_name(current_task)
+                if task_name in ALL_TASKS:
+                    msg = 'Mark %d done (y/[n])? ' % int(current_task)
+                    response = windows[CLI_PANEL].get_response(msg)
+                    if response == 'y' or response == 'Y':
+                        mark_done(current_task)
+                    elif response == 'n' or response == 'N':
+                        pass
+                    else:
+                        msg = '? enter y or n, not %s' % response
+                        windows[CLI_PANEL].set_text(msg)
+
+                    current_project = ''
+                    current_task = ''
+                    build_task_info()
+                    windows[PROJ_PANEL].populate()
+                    windows[TASK_PANEL].populate()
+                else:
+                    msg = '? no such task found: %d' % int(current_task)
+                    windows[CLI_PANEL].set_text(msg)
+
             elif key == 'e':
-                # replace the screen with and EDITOR session
-                if current_task in ALL_TASKS:
-                    prompt = 'Edit [%s]: ' % current_task
+                # replace the screen with an EDITOR session
+                if dbs_task.task_canonical_name(current_task) in ALL_TASKS:
+                    prompt = 'Edit [%d]: ' % int(current_task)
                     response = windows[CLI_PANEL].get_response(prompt)
                     if not response:
                         response = current_task
                     ret = edit_task(response)
                     if len(ret) > 0:
                         windows[CLI_PANEL].set_text(ret)
-                    response = ''
+                    else:
+                        build_task_info()
+                        windows[PROJ_PANEL].populate()
+                        windows[TASK_PANEL].populate()
+                        response = ''
                 else:
-                    msg = '? no such task found: %s' % current_task
+                    msg = '? no such task found: %d' % int(current_task)
                     windows[CLI_PANEL].set_text(msg)
 
             elif key == 'j' or str(key) == 'KEY_DOWN':
@@ -1819,14 +1925,15 @@ def dbsui(stdscr):
                 windows[TASK_PANEL].prev_task()
 
             elif key == 'n':
-                if current_task not in ALL_TASKS:
-                    this_task = current_task
+                task_name = dbs_task.task_canonical_name(current_task)
+                if task_name in ALL_TASKS:
+                    this_task = task_name
                     response = windows[CLI_PANEL].get_response('Add note: ')
                     add_task_note(response)
                     windows[TASK_PANEL].populate()
                     current_task = this_task
                 else:
-                    msg = '? no such task found: %s' % current_task
+                    msg = '? no such task found: %d' % int(current_task)
                     windows[CLI_PANEL].set_text(msg)
 
             elif key == 's':
@@ -1836,7 +1943,7 @@ def dbsui(stdscr):
                     windows[PROJ_PANEL].hide()
                     windows[TASK_PANEL].hide()
                     windows[LIST_PANEL].set_content(clist)
-                    msg = ' show: task %s ' % current_task
+                    msg = ' show: task %d ' % int(current_task)
                     windows[TRAILER_PANEL].set_text(msg)
                     windows[LIST_PANEL].show()
                     state = 10
@@ -2018,7 +2125,58 @@ def dbsui(stdscr):
                 ret = edit_task(response)
                 if len(ret) > 0:
                     windows[CLI_PANEL].set_text(ret)
+                else:
+                    build_task_info()
+                    windows[PROJ_PANEL].populate()
+                    windows[TASK_PANEL].populate()
                 response = ''
+            elif key == 'j' or str(key) == 'KEY_DOWN':
+                windows[LIST_PANEL].next()
+            elif key == 'k' or str(key) == 'KEY_UP':
+                windows[LIST_PANEL].prev()
+            elif key == 'KEY_RESIZE' or key == curses.KEY_RESIZE:
+                if curses.is_term_resized(maxy, maxx):
+                    resize_windows(stdscr, windows)
+            elif str(key) == 'KEY_NPAGE':
+                windows[LIST_PANEL].next_page()
+            elif str(key) == 'KEY_PPAGE':
+                windows[LIST_PANEL].prev_page()
+            elif key == 's':
+                prev_task = current_task
+                tname = current_line.split()[0]
+                current_task = dbs_task.task_canonical_name(tname)
+                windows[HEADER_PANEL].save_previous()
+                windows[PROJ_PANEL].save_previous()
+                windows[TASK_PANEL].save_previous()
+                windows[LIST_PANEL].save_previous()
+                windows[TRAILER_PANEL].save_previous()
+                new_clist = refresh_show()
+                if len(new_clist) > 0:
+                    windows[HEADER_PANEL].set_text(SHOW_HEADER, '')
+                    windows[PROJ_PANEL].hide()
+                    windows[TASK_PANEL].hide()
+                    windows[LIST_PANEL].set_content(new_clist)
+                    msg = ' show: task %d ' % int(current_task)
+                    windows[TRAILER_PANEL].set_text(msg)
+                    windows[LIST_PANEL].show()
+                    state = 30
+                else:
+                    msg = '? no task content found'
+                    windows[CLI_PANEL].set_text(msg)
+            else:
+                ret = "? no such command: %s" % str(key)
+                windows[CLI_PANEL].set_text(ret)
+                state = 20
+
+        elif state == 30:
+            if key == 'q':
+                current_task = dbs_task.task_canonical_name(prev_task)
+                windows[HEADER_PANEL].restore_previous()
+                windows[PROJ_PANEL].restore_previous()
+                windows[TASK_PANEL].restore_previous()
+                windows[LIST_PANEL].restore_previous()
+                windows[TRAILER_PANEL].restore_previous()
+                state = 20
             elif key == 'j' or str(key) == 'KEY_DOWN':
                 windows[LIST_PANEL].next()
             elif key == 'k' or str(key) == 'KEY_UP':
@@ -2033,8 +2191,7 @@ def dbsui(stdscr):
             else:
                 ret = "? no such command: %s" % str(key)
                 windows[CLI_PANEL].set_text(ret)
-                state = 20
-
+                state = 30
 
     return
 

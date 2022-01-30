@@ -66,11 +66,20 @@ class Task:
         for ii in info:
             line = ii.strip()
             k = line.split(':')[0]
-            v = line.split(':')[1:].strip()
+            v = ' '.join(line.split(':')[1:]).strip()
             linenum += 1
-            if RE_NAME.search(line) or RE_TASK.search(line) or \
-               RE_PROJECT.search(line) or RE_NOTE.search(line):
+            if RE_NAME.search(line) or RE_NOTE.search(line):
                 continue
+            elif RE_TASK.search(line):
+                if len(v) > 0:
+                    continue
+                else:
+                    ret = '? no task description at line %d' % (linenum)
+            elif RE_PROJECT.search(line):
+                if len(v) > 0:
+                    continue
+                else:
+                    ret = '? no project name at line %d' % (linenum)
             elif RE_STATE.search(line):
                 if v in ALLOWED_STATES:
                     continue
@@ -227,8 +236,6 @@ class Task:
             nnotes = " [%d]" % note_cnt
         info = fix_task(self.task + nnotes)
         print(f'{color}{int(self.name):>8}    {self.priority:1}    {self.project:<8}   {info}{COLOR_OFF}')
-        #print("%s%-8s    %1s    %-8s  %s%s" % (color, self.name[0:8],
-        #      self.priority, self.project, info, COLOR_OFF))
         return
 
     def write(self, overwrite=False):

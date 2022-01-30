@@ -5,10 +5,13 @@ v0.5.0:
 -- Gave in and set up proper Python packaging; really changes to tree
    structure for source files, and forces x.y.z versioning, but maybe
    useful in the long term
--- Added an ncurses UI (dbsui) on top of CLI (dbs)
 -- Task "names" really need to be numbers now; can use a value (e.g., '4')
    vs the filename ('0004') on all commands
 -- Allow for up to eight digits in the task "name" (aka number)
+-- UI
+   -- Added an ncurses UI (dbsui) on top of CLI (dbs)
+   -- Once a task has been edited, make sure it's legit then update it
+   -- Show (s) task content from any "mode"
 
 v0.4.1:
 -- added "todo" command: show only the projects with open/active tasks

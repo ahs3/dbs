@@ -1,9 +1,6 @@
 TODO:
 =====
 -- UI
-   -- once a task has been edited, make sure it's legit then update it
-      (see edit_task())
-   -- show (s) task content from any "mode"
    -- mark a task done, deleted, active ....
    -- init db structure if it doesn't exist at start-up
 
