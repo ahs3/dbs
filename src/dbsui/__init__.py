@@ -620,7 +620,7 @@ def do_active(params):
     return
 
 def add_task(tname):
-    global DBG, ALL_TASKS
+    global DBG, ALL_TASKS, current_project
 
     ret = ''
     task_name = dbs_task.task_canonical_name(tname)
@@ -629,6 +629,7 @@ def add_task(tname):
 
     t = Task()
     t.set_name(task_name)
+    t.set_project(current_project)
     t.set_priority(MEDIUM)
     t.set_state(OPEN)
     DBG.write('add_task: %s' % task_name)
@@ -666,6 +667,56 @@ def add_task(tname):
         t.write()
 
     DBG.write('add_task: %s = %d [%s]' % (task_name, len(after_edit), ret))
+    return ret
+
+def log_task(tname):
+    global DBG, ALL_TASKS, current_project
+
+    ret = ''
+    task_name = dbs_task.task_canonical_name(tname)
+    if task_name in ALL_TASKS:
+        return ('? task %d already exists' % int(task_name))
+
+    t = Task()
+    t.set_name(task_name)
+    t.set_project(current_project)
+    t.set_priority(MEDIUM)
+    t.set_state(DONE)
+    DBG.write('log_task: %s' % task_name)
+
+    # copy the file to a temporary location
+    before_edit = t.show_text()
+    tfd, tpath = tempfile.mkstemp(text=True)
+    before = bytearray()
+    before.extend(before_edit.encode("utf-8"))
+    os.write(tfd, before)
+    os.fsync(tfd)
+
+    # pop the editor onto the screen
+    editor = os.environ['EDITOR']
+    if not editor:
+        editor = 'vi'
+    result = subprocess.run([editor, tpath])
+    os.lseek(tfd, 0, 0)
+    after = os.read(tfd, os.fstat(tfd).st_size)
+    os.close(tfd)
+    try:
+        os.remove(tpath)
+    except OSError:
+        pass
+
+    # verify the task content
+    after_edit = after.decode("utf-8").split('\n')[0:-1]
+    DBG.write('log_task: new text is:\n%s' % (after_edit))
+    ret = t.validate(after_edit)
+
+    # report an error if needed
+    if len(ret) == 0:
+        t.set_fields(after_edit)
+        t.add_note('logged')
+        t.write()
+
+    DBG.write('log_task: %s = %d [%s]' % (task_name, len(after_edit), ret))
     return ret
 
 def delete_help():
@@ -1168,6 +1219,9 @@ def help_d():
     
 def help_e():
     return ('TASK', 'e', "Edit the current task")
+
+def help_l():
+    return ('TASK', 'l', "Log a task")
 
 def help_n():
     return ('TASK', 'n', "Add a note to the current task")
@@ -1943,6 +1997,20 @@ def dbsui(stdscr):
 
             elif key == 'k' or str(key) == 'KEY_UP':
                 windows[TASK_PANEL].prev_task()
+
+            elif key == 'l':
+                # replace the screen with an EDITOR session
+                raw_task = dbs_task.dbs_next()
+                tname = dbs_task.task_canonical_name(raw_task)
+                response = log_task(tname)
+                if not response:
+                    current_taks = tname
+                    build_task_info()
+                    windows[PROJ_PANEL].populate()
+                    windows[TASK_PANEL].populate()
+                    response = ''
+                else:
+                    windows[CLI_PANEL].set_text(response)
 
             elif key == 'n':
                 task_name = dbs_task.task_canonical_name(current_task)
