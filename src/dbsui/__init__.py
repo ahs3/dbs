@@ -1158,60 +1158,55 @@ def do_up(params):
     return
 
 #-- main
+
+#-- task help messages
 def help_a():
     return ('TASK', 'a', "add a new task")
     
-def help_A():
-    return ('LIST', 'A', "List all active tasks")
-
-def help_Ctrl_A():
-    return ('LIST', 'Ctrl-A', "List ALL tasks, in any state")
-
 def help_d():
     return ('TASK', 'd', "mark a task done")
     
-def help_D():
-    return ('LIST', 'D', "List all done tasks")
-
-def help_Ctrl_D():
-    return ('LIST', 'Ctrl-D', "List all deleted tasks")
-
 def help_e():
     return ('TASK', 'e', "Edit the current task")
 
+def help_n():
+    return ('TASK', 'n', "Add a note to the current task")
+
+def help_s():
+    return ('TASK', 's', "Show the current task")
+
+#-- list help messages
+def help_ctrl_l_a():
+    return ('LIST', 'ctrl-L a', "List all active tasks")
+
+def help_ctrl_l_A():
+    return ('LIST', 'ctrl-L A', "List ALL tasks, in any state")
+
+def help_ctrl_l_d():
+    return ('LIST', 'ctrl-L d', "List all done tasks")
+
+def help_ctrl_l_D():
+    return ('LIST', 'ctrl-L D', "List all deleted tasks")
+
+def help_ctrl_l_o():
+    return ('LIST', 'ctrl-L o', "List all open tasks")
+
+def help_ctrl_l_s():
+    return ('LIST', 'ctrl-L s', "List project state counts")
+
+#-- motion help messages
 def help_j():
     return ('MOVE', 'j, <down arrow>', "Next line")
 
 def help_k():
     return ('MOVE', 'k, <up arrow>', "Previous line")
 
-def help_n():
-    return ('TASK', 'n', "Add a note to the current task")
-
 def help_N():
     return ('MOVE', 'Ctrl-N', "Next project")
-
-def help_Ctrl_O():
-    return ('LIST', 'Ctrl-O', "List all open tasks")
 
 def help_P():
     return ('MOVE', 'Ctrl-P', "Previous project")
 
-def help_R():
-    return ('MISC', 'Ctrl-R', "Refresh all project and task info")
-
-def help_s():
-    return ('TASK', 's', "Show the current task")
-
-def help_S():
-    return ('LIST', 'S', "List project state counts")
-
-def help_v():
-    return ('MISC', 'v', "Display the dbs version number")
-
-def help_help():
-    return ('MISC', '?', "help (show this list)")
-    
 def help_KEY_DOWN():
     return ('MOVE', '<down arrow>, j', "Next line")
 
@@ -1224,6 +1219,17 @@ def help_PAGE_DOWN():
 def help_PAGE_UP():
     return ('MOVE', '<PgUp>', "Previous page")
 
+#-- miscellaneous help messages
+def help_R():
+    return ('MISC', 'ctrl-R', "Refresh all project and task info")
+
+def help_v():
+    return ('MISC', 'v', "Display the dbs version number")
+
+def help_help():
+    return ('MISC', '?', "help (show this list)")
+    
+#-- helper functions
 def basic_counts():
     global ALL_TASKS, ALL_PROJECTS
 
@@ -1969,57 +1975,104 @@ def dbsui(stdscr):
                 windows[CLI_PANEL].set_text(VERSION_TEXT)
                 state = 0
 
-            elif key == '':
-                clist = refresh_all_tasks()
-                if len(clist) > 0:
-                    windows[HEADER_PANEL].set_text(TASKS_HEADER,
-                                                   ' || All Tasks ')
-                    windows[PROJ_PANEL].hide()
-                    windows[TASK_PANEL].hide()
-                    windows[LIST_PANEL].set_content(clist)
-                    msg = ALL_TASKS_TRAILER % len(clist)
-                    windows[TRAILER_PANEL].set_text(msg)
-                    windows[LIST_PANEL].show()
-                    state = 20
-                else:
-                    msg = '? no tasks found'
-                    windows[CLI_PANEL].set_text(msg)
+            # handle all lists here
+            elif key == '':
+                response = windows[CLI_PANEL].get_response('Which list? ')
+                if response == 'a':
+                    clist = refresh_active_task_list()
+                    if len(clist) > 0:
+                        windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                                    '|| Active Tasks ')
+                        windows[PROJ_PANEL].hide()
+                        windows[TASK_PANEL].hide()
+                        windows[LIST_PANEL].set_content(clist)
+                        msg = ACTIVE_TASKS_TRAILER % (len(clist))
+                        windows[TRAILER_PANEL].set_text(msg)
+                        windows[LIST_PANEL].show()
+                        state = 20
+                    else:
+                        msg = '? no active tasks'
+                        windows[CLI_PANEL].set_text(msg)
 
-            elif key == '':
-                clist = refresh_deleted_tasks()
-                if len(clist) > 0:
-                    windows[HEADER_PANEL].set_text(TASKS_HEADER,
-                                                   ' || Deleted Tasks ')
+                elif response == 'A':
+                    clist = refresh_all_tasks()
+                    if len(clist) > 0:
+                        windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                                       ' || All Tasks ')
+                        windows[PROJ_PANEL].hide()
+                        windows[TASK_PANEL].hide()
+                        windows[LIST_PANEL].set_content(clist)
+                        msg = ALL_TASKS_TRAILER % len(clist)
+                        windows[TRAILER_PANEL].set_text(msg)
+                        windows[LIST_PANEL].show()
+                        state = 20
+                    else:
+                        msg = '? no tasks found'
+                        windows[CLI_PANEL].set_text(msg)
+
+                elif response == 'd':
+                    clist = refresh_done_task_list()
+                    if len(clist) > 0:
+                        windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                                    ' || Done Tasks ')
+                        windows[PROJ_PANEL].hide()
+                        windows[TASK_PANEL].hide()
+                        windows[LIST_PANEL].set_content(clist)
+                        msg = ' tasks: %d done ' % (len(clist))
+                        windows[TRAILER_PANEL].set_text(msg)
+                        windows[LIST_PANEL].show()
+                        state = 20
+                    else:
+                        msg = '? no done tasks'
+                        windows[CLI_PANEL].set_text(msg)
+
+                elif response == 'D':
+                    clist = refresh_deleted_tasks()
+                    if len(clist) > 0:
+                        windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                                    ' || Deleted Tasks ')
+                        windows[PROJ_PANEL].hide()
+                        windows[TASK_PANEL].hide()
+                        windows[LIST_PANEL].set_content(clist)
+                        msg = DELETED_TASKS_TRAILER % len(clist)
+                        windows[TRAILER_PANEL].set_text(msg)
+                        windows[LIST_PANEL].show()
+                        state = 20
+                    else:
+                        msg = '? no deleted tasks'
+                        windows[CLI_PANEL].set_text(msg)
+
+                elif response == 'o':
+                    clist = refresh_open_tasks()
+                    if len(clist) > 0:
+                        windows[HEADER_PANEL].set_text(TASKS_HEADER,
+                                                    ' || Open Tasks ')
+                        windows[PROJ_PANEL].hide()
+                        windows[TASK_PANEL].hide()
+                        windows[LIST_PANEL].set_content(clist)
+                        msg = OPEN_TASKS_TRAILER % len(clist)
+                        windows[TRAILER_PANEL].set_text(msg)
+                        windows[LIST_PANEL].show()
+                        state = 20
+                    else:
+                        msg = '? no open tasks'
+                        windows[CLI_PANEL].set_text(msg)
+
+                elif response == 's':
+                    windows[HEADER_PANEL].set_text(STATE_COUNTS_HEADER,
+                                                '  || State Counts ')
                     windows[PROJ_PANEL].hide()
                     windows[TASK_PANEL].hide()
+                    clist = refresh_state_counts()
                     windows[LIST_PANEL].set_content(clist)
-                    msg = DELETED_TASKS_TRAILER % len(clist)
+                    msg = ' projects: %d ' % (len(clist))
                     windows[TRAILER_PANEL].set_text(msg)
                     windows[LIST_PANEL].show()
-                    state = 20
-                else:
-                    msg = '? no deleted tasks'
-                    windows[CLI_PANEL].set_text(msg)
+                    state = 10
 
             elif key == '':
                 windows[PROJ_PANEL].next_project()
                 windows[TASK_PANEL].populate()
-
-            elif key == '':
-                clist = refresh_open_tasks()
-                if len(clist) > 0:
-                    windows[HEADER_PANEL].set_text(TASKS_HEADER,
-                                                   ' || Open Tasks ')
-                    windows[PROJ_PANEL].hide()
-                    windows[TASK_PANEL].hide()
-                    windows[LIST_PANEL].set_content(clist)
-                    msg = OPEN_TASKS_TRAILER % len(clist)
-                    windows[TRAILER_PANEL].set_text(msg)
-                    windows[LIST_PANEL].show()
-                    state = 20
-                else:
-                    msg = '? no open tasks'
-                    windows[CLI_PANEL].set_text(msg)
 
             elif key == '':
                 windows[PROJ_PANEL].prev_project()
@@ -2031,38 +2084,6 @@ def dbsui(stdscr):
                 build_task_info()
                 windows[PROJ_PANEL].populate()
                 windows[TASK_PANEL].populate()
-
-            elif key == 'A':
-                clist = refresh_active_task_list()
-                if len(clist) > 0:
-                    windows[HEADER_PANEL].set_text(TASKS_HEADER,
-                                                   '|| Active Tasks ')
-                    windows[PROJ_PANEL].hide()
-                    windows[TASK_PANEL].hide()
-                    windows[LIST_PANEL].set_content(clist)
-                    msg = ACTIVE_TASKS_TRAILER % (len(clist))
-                    windows[TRAILER_PANEL].set_text(msg)
-                    windows[LIST_PANEL].show()
-                    state = 20
-                else:
-                    msg = '? no active tasks'
-                    windows[CLI_PANEL].set_text(msg)
-
-            elif key == 'D':
-                clist = refresh_done_task_list()
-                if len(clist) > 0:
-                    windows[HEADER_PANEL].set_text(TASKS_HEADER,
-                                                   ' || Done Tasks ')
-                    windows[PROJ_PANEL].hide()
-                    windows[TASK_PANEL].hide()
-                    windows[LIST_PANEL].set_content(clist)
-                    msg = ' tasks: %d done ' % (len(clist))
-                    windows[TRAILER_PANEL].set_text(msg)
-                    windows[LIST_PANEL].show()
-                    state = 20
-                else:
-                    msg = '? no done tasks'
-                    windows[CLI_PANEL].set_text(msg)
 
             elif key == 'KEY_RESIZE' or key == curses.KEY_RESIZE:
                 if curses.is_term_resized(maxy, maxx):
@@ -2079,18 +2100,6 @@ def dbsui(stdscr):
             elif str(key) == 'KEY_PPAGE':
                 windows[TASK_PANEL].prev_page()
                 state = 0
-
-            elif key == 'S':
-                windows[HEADER_PANEL].set_text(STATE_COUNTS_HEADER,
-                                               '  || State Counts ')
-                windows[PROJ_PANEL].hide()
-                windows[TASK_PANEL].hide()
-                clist = refresh_state_counts()
-                windows[LIST_PANEL].set_content(clist)
-                msg = ' projects: %d ' % (len(clist))
-                windows[TRAILER_PANEL].set_text(msg)
-                windows[LIST_PANEL].show()
-                state = 10
 
             else:
                 ret = "? no such command: %s" % str(key)
