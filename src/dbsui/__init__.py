@@ -619,9 +619,6 @@ def do_active(params):
         os.remove(fullpath)
     return
 
-def help_a():
-    return ('a', "add a new task")
-    
 def add_task(tname):
     global DBG, ALL_TASKS
 
@@ -692,9 +689,6 @@ def do_delete(params):
 
     return
 
-def help_d():
-    return ('d', "mark a task done")
-    
 def mark_done(raw_task):
     global ALL_TASKS
 
@@ -1164,32 +1158,71 @@ def do_up(params):
     return
 
 #-- main
+def help_a():
+    return ('TASK', 'a', "add a new task")
+    
+def help_A():
+    return ('LIST', 'A', "List all active tasks")
+
+def help_Ctrl_A():
+    return ('LIST', 'Ctrl-A', "List ALL tasks, in any state")
+
+def help_d():
+    return ('TASK', 'd', "mark a task done")
+    
+def help_D():
+    return ('LIST', 'D', "List all done tasks")
+
+def help_Ctrl_D():
+    return ('LIST', 'Ctrl-D', "List all deleted tasks")
+
+def help_e():
+    return ('TASK', 'e', "Edit the current task")
+
 def help_j():
-    return ('j, <down arrow>', "Next line")
+    return ('MOVE', 'j, <down arrow>', "Next line")
 
 def help_k():
-    return ('k, <up arrow>', "Previous line")
+    return ('MOVE', 'k, <up arrow>', "Previous line")
+
+def help_n():
+    return ('TASK', 'n', "Add a note to the current task")
 
 def help_N():
-    return ('Ctrl-N', "Next project")
+    return ('MOVE', 'Ctrl-N', "Next project")
+
+def help_Ctrl_O():
+    return ('LIST', 'Ctrl-O', "List all open tasks")
 
 def help_P():
-    return ('Ctrl-P', "Previous project")
+    return ('MOVE', 'Ctrl-P', "Previous project")
 
 def help_R():
-    return ('Ctrl-R', "Refresh all project and task info")
+    return ('MISC', 'Ctrl-R', "Refresh all project and task info")
 
+def help_s():
+    return ('TASK', 's', "Show the current task")
+
+def help_S():
+    return ('LIST', 'S', "List project state counts")
+
+def help_v():
+    return ('MISC', 'v', "Display the dbs version number")
+
+def help_help():
+    return ('MISC', '?', "help (show this list)")
+    
 def help_KEY_DOWN():
-    return ('<down arrow>, j', "Next line")
+    return ('MOVE', '<down arrow>, j', "Next line")
 
 def help_KEY_UP():
-    return ('<up arrow>, k', "Previous line")
+    return ('MOVE', '<up arrow>, k', "Previous line")
 
 def help_PAGE_DOWN():
-    return ('<PgDn>', "Next page")
+    return ('MOVE', '<PgDn>', "Next page")
 
 def help_PAGE_UP():
-    return ('<PgUp>', "Previous page")
+    return ('MOVE', '<PgUp>', "Previous page")
 
 def basic_counts():
     global ALL_TASKS, ALL_PROJECTS
@@ -1445,9 +1478,6 @@ def refresh_list(screen, win, lines):
 
     return
 
-def help_help():
-    return ('?', "help (show this list)")
-    
 def refresh_help():
     CMDLIST = []
     for ii in globals().keys():
@@ -1457,16 +1487,28 @@ def refresh_help():
             CMDLIST.append(str(ii))
     cmds = sorted(CMDLIST)
 
-    clines = []
+    gnames = ['MOVE', 'MISC', 'LIST', 'TASK']
+    groups = { 'MOVE':['--- Motion ---',],
+               'MISC':['--- Miscellaneous ---',],
+               'LIST':['--- Lists (ctrl-L-?) ---',],
+               'TASK':['--- Tasks ---',],
+             }
     for ii in sorted(cmds):
-        (key, info) = globals()[ii]()
+        (group, key, info) = globals()[ii]()
         info = '%-15s   %s' % (key, info)
-        clines.append(info)
+        if group not in gnames:
+            continue
+        groups[group].append(info)
 
-    return sorted(clines)
+    clines = []
+    for ii in ['MOVE', 'TASK', 'LIST', 'MISC']:
+        clines.append(groups[ii][0])
+        for jj in sorted(groups[ii][1:]):
+            clines.append(jj)
+        if ii != 'MISC':
+            clines.append('')
 
-def help_A():
-    return ('A', "List all active tasks")
+    return clines
 
 def refresh_active_task_list():
     global ALL_TASKS, current_project
@@ -1493,9 +1535,6 @@ def refresh_active_task_list():
 
     return sorted(tlines)
 
-def help_D():
-    return ('D', "List all done tasks")
-
 def refresh_done_task_list():
     global ALL_TASKS, current_project
 
@@ -1520,9 +1559,6 @@ def refresh_done_task_list():
         tlines.append(info)
 
     return sorted(tlines)
-
-def help_Ctrl_A():
-    return ('Ctrl-A', "List ALL tasks, in any state")
 
 def all_cb(win, maxx, linenum, line):
     info = line.split('\t')
@@ -1587,9 +1623,6 @@ def refresh_all_tasks():
 
     return sorted(tlines)
 
-def help_Ctrl_D():
-    return ('Ctrl-D', "List all deleted tasks")
-
 def refresh_deleted_tasks():
     global ALL_TASKS
 
@@ -1615,9 +1648,6 @@ def refresh_deleted_tasks():
 
     return sorted(tlines)
 
-def help_Ctrl_O():
-    return ('Ctrl-O', "List all open tasks")
-
 def refresh_open_tasks():
     global ALL_TASKS
 
@@ -1642,9 +1672,6 @@ def refresh_open_tasks():
         tlines.append(info)
 
     return sorted(tlines)
-
-def help_S():
-    return ('S', "List project state counts")
 
 def refresh_state_counts():
     global ALL_TASKS
@@ -1673,9 +1700,6 @@ def refresh_state_counts():
         tlines.append(info)
 
     return sorted(tlines)
-
-def help_e():
-    return ('e', "Edit the current task")
 
 def edit_task(raw_name):
     global DBG, ALL_TASKS
@@ -1728,12 +1752,6 @@ def edit_task(raw_name):
               (task_name, len(before_edit), len(after_edit), ret))
     return ret
 
-def help_n():
-    return ('n', "Add a note to the current task")
-
-def help_s():
-    return ('s', "Show the current task")
-
 def refresh_show():
     global ALL_TASKS, current_task
 
@@ -1747,9 +1765,6 @@ def refresh_show():
     for ii in t.get_notes():
         tlines.append('Note: %s' % ii)
     return tlines
-
-def help_v():
-    return ('v', "Display the dbs version number")
 
 def build_windows(screen):
     global DBG
@@ -1852,10 +1867,7 @@ def dbsui(stdscr):
                     windows[PROJ_PANEL].hide()
                     windows[TASK_PANEL].hide()
                     windows[LIST_PANEL].set_content(clist)
-                    msg = ' help: %s command' % len(clist)
-                    if len(clist) > 1:
-                        msg += 's'
-                    msg += ' '
+                    msg = ' help: all commands '
                     windows[TRAILER_PANEL].set_text(msg)
                     windows[LIST_PANEL].show()
                 else:
@@ -1885,6 +1897,8 @@ def dbsui(stdscr):
                     if response == 'y' or response == 'Y':
                         mark_done(current_task)
                     elif response == 'n' or response == 'N':
+                        pass
+                    elif not response:
                         pass
                     else:
                         msg = '? enter y or n, not %s' % response
