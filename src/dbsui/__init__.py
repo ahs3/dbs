@@ -448,22 +448,27 @@ class DbsTasks(DbsPanel):
     def populate(self):
         global ACTIVE_TASKS, current_project, current_task
 
-        tlist = get_current_task_list(current_project)
-        clist = []
-        for ii in tlist:
+        tlist0 = get_current_task_list(current_project)
+        tlist = {HIGH:[], MEDIUM:[], LOW:[] }
+        for ii in tlist0:
             t = ACTIVE_TASKS[ii]
-            info = '%8.8s' % t.get_name()
-            if t.note_count() > 0:
-                info += '\t[%2d]' % t.note_count()
-            else:
-                info += '\t    '
-            info += '\t%s' % t.get_priority()
-            info += '\t%s' % t.get_task()
-            if t.get_state() == ACTIVE:
-                info += '\tACTIVE'
-            clist.append(info)
+            tlist[t.get_priority()].append(t)
 
-        self.content = sorted(clist)
+        clist = []
+        for ii in [HIGH, MEDIUM, LOW]:
+            for jj in sorted(tlist[ii]):
+                info = '%8.8s' % jj.get_name()
+                if jj.note_count() > 0:
+                    info += '\t[%2d]' % jj.note_count()
+                else:
+                    info += '\t    '
+                info += '\t%s' % jj.get_priority()
+                info += '\t%s' % jj.get_task()
+                if jj.get_state() == ACTIVE:
+                    info += '\tACTIVE'
+                clist.append(info)
+
+        self.content = clist
         if len(self.content) > 0:
             self.current_task = self.content[0].split('\t')[0]
         current_task = self.current_task
@@ -1402,7 +1407,7 @@ def refresh_header(screen, win, options):
     blanks = ''.ljust(swidth-1, ' ')
     win.clear()
     win.addstr(0, 0, blanks, BOLD_WHITE_ON_BLUE)
-    win.addstr(0, 0, options, BOLD_WHITE_ON_BLUE)
+    win.addstr(0, 0, options[0:swidth-1], BOLD_WHITE_ON_BLUE)
     return
 
 def refresh_trailer(screen, win, msg):

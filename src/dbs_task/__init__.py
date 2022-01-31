@@ -59,6 +59,9 @@ class Task:
         self.state = "open"
         self.notes = []
 
+    def __lt__(self, other):
+        return int(self.name) < int(other.name)
+
     def validate(self, info):
         # info needs to be an array of lines
         ret = ''
