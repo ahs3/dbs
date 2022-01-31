@@ -69,6 +69,7 @@ DONE_TASKS_TRAILER    = ' Done Tasks: %d || j: Next   k: Previous   q: Quit '
 HELP_HEADER           = 'Help || j: NextLine   k: PrevLine  q: Quit'
 OPEN_TASKS_TRAILER    = ' Open Tasks: %d || j: Next   k: Previous   q: Quit '
 MAIN_HEADER           = 'dbs || q: Quit   s: Show Task   ?: Help'
+RECAP_HEADER          = 'Recap || j: NextLine   k: PrevLine  q: Quit'
 SHOW_HEADER           = 'Show Task || j: NextLine   k: PrevLine  q: Quit'
 STATE_COUNTS_HEADER   = 'Project  Active  Open  Done  Deleted   Total'
 TASKS_HEADER          = '--- Name  Project  Note  P  Task'
@@ -1067,25 +1068,13 @@ def do_projects(params):
 
     return
 
-def recap_help():
-    return ('recap', "list all tasks done or touched in <n> days: <n>")
-    
-def do_recap(params):
-    days = 1
-    if len(params) >= 1:
-        if params[0].isnumeric():
-            days = int(params[0])
-        else:
-            print("? need a numeric value for number of days")
-            sys.exit(1)
-
-    if days > DAYS_LIMIT:
-        print("? no, you really don't want more than %d days worth." %
-              int(days))
-        sys.exit(1)
+def refresh_recap(days):
+    if int(days) > int(DAYS_LIMIT):
+        return ("? no, you really don't want more than %d days worth." %
+               int(days))
 
     current_time = time.time()
-    elapsed_time = days * 3600 * 24
+    elapsed_time = int(days) * 3600 * 24
 
     fullpath = os.path.join(dbs_repo(), DONE)
     tasks = {}
@@ -1098,22 +1087,33 @@ def do_recap(params):
                t.populate(os.path.join(fullpath, ii), ii)
                tasks[ii] = t
 
+    clist = []
     if len(tasks) < 1:
-        print("No %s tasks found." % DONE)
+        clist.append("No %s tasks found." % DONE)
     else:
-        if days == 1:
-           print("Done during the last day:")
+        if int(days) == 1:
+            clist.append("Done during the last day:")
         else:
-           print("Done during the last %d days:" % days)
-        one_line_header()
-        keys = tasks.keys()
+            clist.append("Done over the last %d days:" % int(days))
         for pri in [HIGH, MEDIUM, LOW]:
-            for ii in sorted(keys):
+            for ii in sorted(tasks):
                if tasks[ii].get_priority() == pri:
-                    tasks[ii].one_line()
+                    info = '%8d  ' % int(tasks[ii].get_name())
+                    if tasks[ii].get_state() == DELETED:
+                        info += '%1.1s  ' % 'D'
+                    else:
+                        info += '%1.1s  ' % tasks[ii].get_state()[0:1]
+                    info += '%7.7s  ' % tasks[ii].get_project()
+                    if tasks[ii].note_count() > 0:
+                        info += '[%.2d]  ' % tasks[ii].note_count()
+                    else:
+                        info += '      '
+                    info += '%1s  ' % tasks[ii].get_priority()
+                    info += '%s' % tasks[ii].get_task()
+                    clist.append(info)
 
     fullpath = os.path.join(dbs_repo(), ACTIVE)
-    tasks = {}
+    tasks.clear()
     for (dirpath, dirnames, filenames) in os.walk(fullpath):
         for ii in filenames:
            file_time = os.path.getmtime(os.path.join(fullpath, ii))
@@ -1123,23 +1123,33 @@ def do_recap(params):
                t.populate(os.path.join(fullpath, ii), ii)
                tasks[ii] = t
 
-    print("")
+    clist.append("")
     if len(tasks) < 1:
-        print("No %s tasks touched." % ACTIVE)
+        clist.append("No %s tasks touched." % ACTIVE)
     else:
-        if days == 1:
-            print("Active tasks touched the last day:")
+        if int(days) == 1:
+            clist.append("Active during the last day:")
         else:
-            print("Active tasks touched during the last %d days:" % days)
-        one_line_header()
-        keys = tasks.keys()
+            clist.append("Active over the last %d days:" % int(days))
         for pri in [HIGH, MEDIUM, LOW]:
-            for ii in sorted(keys):
+            for ii in sorted(tasks):
                if tasks[ii].get_priority() == pri:
-                    tasks[ii].one_line()
+                    info = '%8d  ' % int(tasks[ii].get_name())
+                    if tasks[ii].get_state() == DELETED:
+                        info += '%1.1s  ' % 'D'
+                    else:
+                        info += '%1.1s  ' % tasks[ii].get_state()[0:1]
+                    info += '%7.7s  ' % tasks[ii].get_project()
+                    if tasks[ii].note_count() > 0:
+                        info += '[%.2d]  ' % tasks[ii].note_count()
+                    else:
+                        info += '      '
+                    info += '%1s  ' % tasks[ii].get_priority()
+                    info += '%s' % tasks[ii].get_task()
+                    clist.append(info)
 
     fullpath = os.path.join(dbs_repo(), OPEN)
-    tasks = {}
+    tasks.clear()
     for (dirpath, dirnames, filenames) in os.walk(fullpath):
         for ii in filenames:
            file_time = os.path.getmtime(os.path.join(fullpath, ii))
@@ -1149,21 +1159,32 @@ def do_recap(params):
                t.populate(os.path.join(fullpath, ii), ii)
                tasks[ii] = t
 
-    print("")
+    clist.append("")
     if len(tasks) < 1:
-        print("No %s tasks touched." % OPEN)
+        clist.append("No %s tasks touched." % OPEN)
     else:
-        if days == 1:
-            print("Open tasks touched the last day:")
+        if int(days) == 1:
+            clist.append("Open tasks touched during the last day:")
         else:
-            print("Open tasks touched during the last %d days:" % days)
-        one_line_header()
-        keys = tasks.keys()
+            clist.append("Open tasks touched over the last %d days:" % int(days))
         for pri in [HIGH, MEDIUM, LOW]:
-            for ii in sorted(keys):
+            for ii in sorted(tasks):
                if tasks[ii].get_priority() == pri:
-                    tasks[ii].one_line()
-    return
+                    info = '%8d  ' % int(tasks[ii].get_name())
+                    if tasks[ii].get_state() == DELETED:
+                        info += '%1.1s  ' % 'D'
+                    else:
+                        info += '%1.1s  ' % tasks[ii].get_state()[0:1]
+                    info += '%7.7s  ' % tasks[ii].get_project()
+                    if tasks[ii].note_count() > 0:
+                        info += '[%.2d]  ' % tasks[ii].note_count()
+                    else:
+                        info += '      '
+                    info += '%1s  ' % tasks[ii].get_priority()
+                    info += '%s' % tasks[ii].get_task()
+                    clist.append(info)
+
+    return clist
 
 def state_help():
     return ('state', "print project task summaries by state")
@@ -1231,6 +1252,9 @@ def help_l():
 def help_n():
     return ('TASK', 'n', "Add a note to the current task")
 
+def help_r():
+    return ('TASK', 'r', "Recap tasks done or touched")
+    
 def help_s():
     return ('TASK', 's', "Show the current task")
 
@@ -2027,6 +2051,27 @@ def dbsui(stdscr):
                     current_task = this_task
                 else:
                     msg = '? no such task found: %d' % int(current_task)
+                    windows[CLI_PANEL].set_text(msg)
+
+            elif key == 'r':
+                days = windows[CLI_PANEL].get_response('Number of days [7]: ')
+                if not days:
+                    days = 7
+                clist = refresh_recap(days)
+                if len(clist) > 0:
+                    windows[HEADER_PANEL].set_text(RECAP_HEADER, '')
+                    windows[PROJ_PANEL].hide()
+                    windows[TASK_PANEL].hide()
+                    windows[LIST_PANEL].set_content(clist)
+                    msg = ' recap: %d day' % int(days)
+                    if int(days) > 1:
+                        msg += 's'
+                    msg += ' '
+                    windows[TRAILER_PANEL].set_text(msg)
+                    windows[LIST_PANEL].show()
+                    state = 10
+                else:
+                    msg = '? no tasks found'
                     windows[CLI_PANEL].set_text(msg)
 
             elif key == 's':
