@@ -166,6 +166,9 @@ class DbsPanel(DbsLine):
     def next(self):
         global DBG
 
+        if not self.content:
+            return 
+
         # go to next line of content
         self.current_index += 1
         if self.current_index > len(self.content) - 1:
@@ -186,6 +189,9 @@ class DbsPanel(DbsLine):
     def prev(self):
         global DBG
 
+        if not self.content:
+            return 
+
         # go to previous line of content
         self.current_index -= 1
         if self.current_index < 0:
@@ -204,6 +210,9 @@ class DbsPanel(DbsLine):
 
     def next_page(self):
         global DBG
+
+        if not self.content:
+            return 
 
         # go to next page of content
         self.current_index += (self.page_height - 1)
@@ -225,6 +234,9 @@ class DbsPanel(DbsLine):
 
     def prev_page(self):
         global DBG, current_line
+
+        if not self.content:
+            return 
 
         # go to previous page of content
         self.current_index -= (self.page_height - 1)
@@ -397,6 +409,9 @@ class DbsProjects(DbsPanel):
     def next_project(self):
         global current_project
 
+        if not self.content:
+            return 
+
         self.next()
         self.current_project = self.content[self.current_index].split('\t')[0]
         current_project = self.current_project
@@ -405,6 +420,9 @@ class DbsProjects(DbsPanel):
 
     def prev_project(self):
         global current_project
+
+        if not self.content:
+            return 
 
         self.prev()
         self.current_project = self.content[self.current_index].split('\t')[0]
@@ -433,6 +451,9 @@ class DbsTasks(DbsPanel):
         global current_task
         global DBG
 
+        if not self.content:
+            return 
+
         if self.hidden:
             self.current_index = 0
             self.current_page = 0
@@ -450,6 +471,9 @@ class DbsTasks(DbsPanel):
         global ACTIVE_TASKS, current_project, current_task
 
         tlist0 = get_current_task_list(current_project)
+        if not tlist0:
+            return
+
         tlist = {HIGH:[], MEDIUM:[], LOW:[] }
         for ii in tlist0:
             t = ACTIVE_TASKS[ii]
@@ -480,6 +504,9 @@ class DbsTasks(DbsPanel):
     def next_task(self):
         global current_task
 
+        if not self.content:
+            return
+
         self.next()
         self.current_task = self.content[self.current_index].split('\t')[0]
         current_task = self.current_task
@@ -488,6 +515,9 @@ class DbsTasks(DbsPanel):
 
     def prev_task(self):
         global current_task
+
+        if not self.content:
+            return
 
         self.prev()
         self.current_task = self.content[self.current_index].split('\t')[0]
@@ -519,6 +549,9 @@ class DbsList(DbsPanel):
         if self.hidden:
             return
 
+        if not self.content:
+            return 
+
         start = self.current_page * (self.page_height - 1)
         if start > len(self.content) - 1:
             start = len(self.content) - 1
@@ -546,6 +579,9 @@ class DbsList(DbsPanel):
     def next(self):
         global current_line
 
+        if not self.content:
+            return 
+
         super(DbsList, self).next()
         current_line = self.content[self.current_index]
 
@@ -553,6 +589,9 @@ class DbsList(DbsPanel):
 
     def prev(self):
         global current_line
+
+        if not self.content:
+            return 
 
         super(DbsList, self).prev()
         current_line = self.content[self.current_index]
@@ -562,6 +601,9 @@ class DbsList(DbsPanel):
     def next_page(self):
         global current_line
 
+        if not self.content:
+            return 
+
         super(DbsList, self).next_page()
         current_line = self.content[int(self.current_index)]
 
@@ -569,6 +611,9 @@ class DbsList(DbsPanel):
 
     def prev_page(self):
         global current_line
+
+        if not self.content:
+            return 
 
         super(DbsList, self).prev_page()
         current_line = self.content[int(self.current_index)]
@@ -1213,6 +1258,10 @@ def get_current_task_list(current_project):
 
     DBG.write('get_current_task_list: ' + current_project)
     ACTIVE_TASKS.clear()
+
+    if not ALL_TASKS or not ACTIVE_PROJECTS:
+        return
+
     task_list = []
     task_list = ACTIVE_PROJECTS[current_project][HIGH] + \
                 ACTIVE_PROJECTS[current_project][MEDIUM] + \
@@ -2192,6 +2241,17 @@ def dbsui(stdscr):
 def dbsui_main():
     global DBG
 
+    #-- create the "data base"
+    if not os.path.isdir(dbs_task.dbs_repo()):
+        dbs_task.dbs_make_repo()
+
+    if not os.path.isfile(dbs_task.dbs_config_name()):
+        dbs_task.dbs_defconfig()
+
+    if not dbs_task.dbs_data_dirs_exist():
+        dbs_task.dbs_make_data_dirs()
+
+    #-- start up the UI
     DBG = Debug()
     curses.wrapper(dbsui)
     DBG.done()
