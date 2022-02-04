@@ -12,6 +12,7 @@ v0.5.0:
    -- Added an ncurses UI (dbsui) on top of CLI (dbs)
    -- Once a task has been edited, make sure it's legit then update it
    -- Show (s) task content from any "mode"
+   -- Mark a task active, inactive, higher/lower priority, done, deleted
 
 v0.4.1:
 -- added "todo" command: show only the projects with open/active tasks

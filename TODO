@@ -1,7 +1,6 @@
 TODO:
 =====
 -- UI
-   -- mark a task done, deleted, active ....
    -- init db structure if it doesn't exist at start-up
 
 -- add recurring tasks

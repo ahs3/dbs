@@ -606,25 +606,6 @@ class Debug:
         return
 
 #-- command functions
-def active_help():
-    return ('active', "mark a task active")
-    
-def do_active(params):
-    if len(params) < 1:
-        print("? must provide at least one task name")
-        sys.exit(1)
-    for ii in params:
-        t = get_task(ii)
-        if not t:
-            continue
-        fullpath = task_name_exists(ii)
-        t.set_state(ACTIVE)
-        t.add_note("marked active")
-        put_task(t, overwrite=False)
-        t.print()
-        os.remove(fullpath)
-    return
-
 def add_task(tname):
     global DBG, ALL_TASKS, current_project
 
@@ -725,24 +706,35 @@ def log_task(tname):
     DBG.write('log_task: %s = %d [%s]' % (task_name, len(after_edit), ret))
     return ret
 
-def delete_help():
-    return ('delete', "delete one or more tasks: <name> ...")
-    
-def do_delete(params):
-    if len(params) < 1:
-        print("? must provide at least one task name")
-        sys.exit(1)
+def mark_active(raw_task):
+    global ALL_TASKS
 
-    for ii in params:
-        t = get_task(ii)
-        if not t:
-            continue
-        fullpath = task_name_exists(ii)
-        t.set_state(DELETED)
-        t.add_note("mark deleted")
-        t.move(DELETED)
-        t.print()
+    tname = dbs_task.task_canonical_name(raw_task)
+    if tname in ALL_TASKS:
+        t = ALL_TASKS[tname]
+        fullpath = dbs_task.task_name_exists(tname)
+        t.set_state(ACTIVE)
+        t.add_note("marked active")
+        t.move(ACTIVE)
         os.remove(fullpath)
+    else:
+        return ('? no such task: %d' % int(raw_task))
+
+    return
+
+def mark_deleted(raw_task):
+    global ALL_TASKS
+
+    tname = dbs_task.task_canonical_name(raw_task)
+    if tname in ALL_TASKS:
+        t = ALL_TASKS[tname]
+        fullpath = dbs_task.task_name_exists(tname)
+        t.set_state(DELETED)
+        t.add_note("deleted")
+        t.move(DELETED)
+        os.remove(fullpath)
+    else:
+        return ('? no such task: %d' % int(raw_task))
 
     return
 
@@ -762,309 +754,61 @@ def mark_done(raw_task):
 
     return
 
-def down_help():
-    return ('down', "lower the priority of a task: <name> ...")
-    
-def do_down(params):
-    if len(params) < 1:
-        print("? must provide at least one task name")
-        sys.exit(1)
-    
-    for ii in params:
-        t = get_task(ii)
-        if not t:
-            continue
+def mark_higher(raw_task):
+    global ALL_TASKS
+
+    tname = dbs_task.task_canonical_name(raw_task)
+    if tname in ALL_TASKS:
+        t = ALL_TASKS[tname]
+        pri = t.get_priority()
+        if pri == LOW:
+            pri = MEDIUM
+        elif pri == MEDIUM:
+            pri = HIGH
+        else:
+            return ("? task \"%s\" already at '%s'" % (int(raw_task), HIGH))
+        t.set_priority(pri)
+        t.add_note("upped priority")
+        put_task(t)
+    else:
+        return ('? no such task: %d' % int(raw_task))
+
+    return
+
+def mark_inactive(raw_task):
+    global ALL_TASKS
+
+    tname = dbs_task.task_canonical_name(raw_task)
+    if tname in ALL_TASKS:
+        t = ALL_TASKS[tname]
+        fullpath = dbs_task.task_name_exists(tname)
+        t.set_state(OPEN)
+        t.add_note("marked open")
+        t.move(OPEN)
+        os.remove(fullpath)
+    else:
+        return ('? no such task: %d' % int(raw_task))
+
+    return
+
+def mark_lower(raw_task):
+    global ALL_TASKS
+
+    tname = dbs_task.task_canonical_name(raw_task)
+    if tname in ALL_TASKS:
+        t = ALL_TASKS[tname]
         pri = t.get_priority()
         if pri == HIGH:
             pri = MEDIUM
         elif pri == MEDIUM:
             pri = LOW
         else:
-            print("? task \"%s\" already at '%s'" % (ii, LOW))
-            continue
+            return ("? task \"%s\" already at '%s'" % (int(raw_task), HIGH))
         t.set_priority(pri)
-        t.add_note("downed priority")
+        t.add_note("upped priority")
         put_task(t)
-
-    return
-
-def dup_help():
-    return ('dup', "duplicate a task: <old-name> <new-name>")
-    
-def do_dup(params):
-    if len(params) < 2:
-        print("? must provide old and new task names")
-        sys.exit(1)
-    
-    oldtask = params[0]
-    if params[1] == 'next':
-        newtask = dbs_next()
     else:
-        newtask = params[1]
-
-    tnew = get_task(oldtask)
-    if not tnew:        # the original to be copied does not exist
-        return
-
-    tnew.set_name(newtask)
-    tnew.add_note("duplicate of %s" % oldtask)
-    put_task(tnew, overwrite=False)
-
-    return
-
-def edit_help():
-    return ('edit', "edit a task: <name>")
-    
-def do_edit(params):
-    if len(params) < 1:
-        print("? must provide a task name")
-        sys.exit(1)
-    
-    origtask = get_task(params[0])
-    if not origtask:        # the original does not exist
-        return
-    fullpath = task_name_exists(params[0])
-    tmppath = tempfile.mktemp()
-    shutil.copyfile(fullpath, tmppath)
-
-    result = editor.edit(filename=tmppath)
-    newtask = Task()
-    newtask.populate(tmppath, origtask.get_name())
-    if newtask.get_state() == origtask.get_state():
-        put_task(newtask, overwrite=True)
-    else:
-        newtask.write()
-        os.remove(fullpath)
-
-    os.remove(tmppath)
-
-    return
-
-def inactive_help():
-    return ('inactive', "move task from active to open")
-
-def do_inactive(params):
-    if len(params) < 1:
-        print("? must provide at least one task name")
-        sys.exit(1)
-
-    for ii in params:
-        t = get_task(ii)
-        if not t:
-            continue
-        fullpath = task_name_exists(ii)
-        t.set_state(OPEN)
-        t.add_note("moved from active back to open")
-        put_task(t, overwrite=False)
-        t.print()
-        os.remove(fullpath)
-    return
-
-def log_help():
-    return ('log', "log done task: <name> <project> <priority> <description>")
-    
-def do_log(params):
-    task = Task()
-    if len(params) < 4:
-        print("? %s" % log_help())
-        p = ' '.join(params)
-        p.replace('[','')
-        p.replace(']','')
-        p.replace('.','')
-        print("  got: %s" % p)
-        return
-
-    if params[0] == 'next':
-        tname = dbs_next()
-    else:
-        tname = params[0]
-    if task_name_exists(tname):
-        print("? a task by that name (\"%s\") already exists" % tname)
-        sys.exit(1)
-
-    task.set_name(tname)
-    task.set_project(params[1])
-    task.set_priority(params[2])
-    task.set_task(' '.join(params[3:]))
-    task.set_state(DONE)
-    task.add_note("added to log")
-
-    task.print()
-    task.write()
-
-    return
-
-def next_help():
-    return ('next', "return next unused sequence number (to use as a name)")
-
-def do_next(params):
-    print("Next usable sequence number: %s" % dbs_next())
-    return
-
-def note_help():
-    return ('note', "add a note to a task: <name> <note>")
-    
-def do_note(params):
-    if len(params) < 2:
-        print("? expected -- %s" % note_help())
-        print("  got: %s" % ' '.join(params))
-        sys.exit(1)
-
-    fullpath = task_name_exists(params[0])
-    if not fullpath:
-        print("? task \"%s\" is not defined" % params[0])
-        sys.exit(1)
-
-    t = get_task(params[0])
-    if not t:
-        return
-    t.add_note(' '.join(params[1:]))
-    put_task(t, overwrite=True)
-    t.print()
-
-    return
-
-def num_help():
-    return ('num', "print project task counts")
-    
-def do_num(params):
-    summaries = {}
-    tasks = {}
-
-    for state in ALLOWED_STATES:
-        if state == DELETED:
-            continue
-        fullpath = os.path.join(dbs_repo(), state)
-        for (dirpath, dirnames, filenames) in os.walk(fullpath):
-            for ii in filenames:
-               t = Task()
-               t.populate(os.path.join(fullpath, ii), ii)
-               proj = t.get_project()
-               pri = t.get_priority()
-               state = t.get_state()
-               if proj not in summaries:
-                   summaries[proj] = 0
-               summaries[proj] += 1
-               tasks[ii] = t
-
-    if len(tasks) < 1:
-        print("No projects found.")
-        return
-
-    print("Task counts by project:")
-    print("-Name---  --Total--")
-    total = 0
-    for ii in sorted(summaries.keys()):
-        total += summaries[ii]
-        print("%s%-8s%s   %5d" % (GREEN_ON, ii, COLOR_OFF, summaries[ii]))
-
-    print_projects_found(len(summaries))
-    print_tasks_found(total, False)
-    return
-
-def priority_help():
-    return ('priority', "print project task summaries by priority")
-    
-def do_priority(params):
-    summaries = {}
-    tasks = {}
-
-    for state in ALLOWED_STATES:
-        if state == DELETED:
-            continue
-        fullpath = os.path.join(dbs_repo(), state)
-        for (dirpath, dirnames, filenames) in os.walk(fullpath):
-            for ii in filenames:
-               t = Task()
-               t.populate(os.path.join(fullpath, ii), ii)
-               proj = t.get_project()
-               pri = t.get_priority()
-               state = t.get_state()
-               if proj not in summaries:
-                   summaries[proj] = { HIGH:0, MEDIUM:0, LOW:0, \
-                                       ACTIVE:0, OPEN:0, DONE:0 }
-               summaries[proj][pri] += 1
-               summaries[proj][state] += 1
-               tasks[ii] = t
-
-    if len(tasks) < 1:
-        print("No projects and no summaries.")
-        return
-
-    print("Summary by priority:")
-    print("-Name---  --H- --M- --L-  --Total--")
-    for ii in sorted(summaries.keys()):
-        print("%s%-8s%s  %3d  %3d  %3d   %5d" %
-              (GREEN_ON, ii, COLOR_OFF,
-               summaries[ii][HIGH], summaries[ii][MEDIUM], summaries[ii][LOW],
-               summaries[ii][HIGH] + summaries[ii][MEDIUM] + summaries[ii][LOW]
-              ))
-
-    print("")
-    if len(summaries.keys()) > 1:
-        ssuffix = 's'
-    if len(tasks) > 1:
-        tsuffix = 's'
-    print("%d project%s with %d task%s" % (len(summaries.keys()), ssuffix,
-          len(tasks), tsuffix))
-
-    return
-
-def projects_help():
-    return ('projects', "print project task summaries")
-    
-def do_projects(params):
-    summaries = {}
-    tasks = {}
-
-    for state in ALLOWED_STATES:
-        if state == DELETED:
-            continue
-        fullpath = os.path.join(dbs_repo(), state)
-        for (dirpath, dirnames, filenames) in os.walk(fullpath):
-            for ii in filenames:
-               t = Task()
-               t.populate(os.path.join(fullpath, ii), ii)
-               proj = t.get_project()
-               pri = t.get_priority()
-               state = t.get_state()
-               if proj not in summaries:
-                   summaries[proj] = { HIGH:0, MEDIUM:0, LOW:0, \
-                                       ACTIVE:0, OPEN:0, DONE:0 }
-               summaries[proj][pri] += 1
-               summaries[proj][state] += 1
-               tasks[ii] = t
-
-    if len(tasks) < 1:
-        print("No projects and no summaries.")
-        return
-
-    print("Summary by priority:")
-    print("-Name---  --H- --M- --L-  --Total--")
-    for ii in sorted(summaries.keys()):
-        print("%s%-8s%s  %3d  %3d  %3d   %5d" %
-              (GREEN_ON, ii, COLOR_OFF,
-               summaries[ii][HIGH], summaries[ii][MEDIUM], summaries[ii][LOW],
-               summaries[ii][HIGH] + summaries[ii][MEDIUM] + summaries[ii][LOW]
-              ))
-
-    print("")
-    print("Summary by state:")
-    print("-Name---  -Active- -Open- -Closed-  --Total--")
-    for ii in sorted(summaries.keys()):
-        print("%s%-8s%s    %3d     %3d     %3d      %5d" %
-            (GREEN_ON, ii, COLOR_OFF,
-             summaries[ii][ACTIVE], summaries[ii][OPEN], summaries[ii][DONE],
-             summaries[ii][ACTIVE] + summaries[ii][OPEN] + summaries[ii][DONE]
-            ))
-
-    print("")
-    if len(summaries.keys()) > 1:
-        ssuffix = 's'
-    if len(tasks) > 1:
-        tsuffix = 's'
-    print("%d project%s with %d task%s" % (len(summaries.keys()), ssuffix,
-          len(tasks), tsuffix))
+        return ('? no such task: %d' % int(raw_task))
 
     return
 
@@ -1186,59 +930,14 @@ def refresh_recap(days):
 
     return clist
 
-def state_help():
-    return ('state', "print project task summaries by state")
-    
-def do_state():
-    projects = []
-    tasks = 0
-
-    for state in ALLOWED_STATES:
-        if state == DELETED or state == DONE:
-            continue
-        fullpath = os.path.join(dbs_repo(), state)
-        for (dirpath, dirnames, filenames) in os.walk(fullpath):
-            for ii in filenames:
-               t = Task()
-               t.populate(os.path.join(fullpath, ii), ii)
-               proj = t.get_project()
-               if proj not in projects:
-                   projects.append(proj)
-               tasks += 1
-
-    return (len(projects), tasks)
-
-def up_help():
-    return ('up', "raise the priority of a task: <name> ...")
-    
-def do_up(params):
-    if len(params) < 1:
-        print("? must provide at least one task name")
-        sys.exit(1)
-    
-    for ii in params:
-        t = get_task(ii)
-        if not t:
-            continue
-        pri = t.get_priority()
-        if pri == LOW:
-            pri = MEDIUM
-        elif pri == MEDIUM:
-            pri = HIGH
-        else:
-            print("? task \"%s\" already at '%s'" % (ii, HIGH))
-            continue
-        t.set_priority(pri)
-        t.add_note("upped priority")
-        put_task(t)
-
-    return
-
 #-- main
 
 #-- task help messages
 def help_a():
     return ('TASK', 'a', "Add a new task")
+    
+def help_A():
+    return ('TASK', 'A', "Mark a task active")
     
 def help_d():
     return ('TASK', 'd', "Mark a task done")
@@ -1246,12 +945,21 @@ def help_d():
 def help_e():
     return ('TASK', 'e', "Edit the current task")
 
+def help_I():
+    return ('TASK', 'I', "Mark a task inactive (and leave as open)")
+    
 def help_l():
     return ('TASK', 'l', "Log a task")
 
+def help_minus():
+    return ('TASK', '-', "Lower the priority of a task")
+    
 def help_n():
     return ('TASK', 'n', "Add a note to the current task")
 
+def help_plus():
+    return ('TASK', '+', "Raise the priority of a task")
+    
 def help_r():
     return ('TASK', 'r', "Recap tasks done or touched")
     
@@ -1978,6 +1686,30 @@ def dbsui(stdscr):
                 else:
                     windows[CLI_PANEL].set_text(response)
 
+            elif key == 'A':
+                task_name = dbs_task.task_canonical_name(current_task)
+                if task_name in ALL_TASKS:
+                    msg = 'Mark %d active (y/[n])? ' % int(current_task)
+                    response = windows[CLI_PANEL].get_response(msg)
+                    if response == 'y' or response == 'Y':
+                        mark_active(current_task)
+                    elif response == 'n' or response == 'N':
+                        pass
+                    elif not response:
+                        pass
+                    else:
+                        msg = '? enter y or n, not %s' % response
+                        windows[CLI_PANEL].set_text(msg)
+
+                    current_project = ''
+                    current_task = ''
+                    build_task_info()
+                    windows[PROJ_PANEL].populate()
+                    windows[TASK_PANEL].populate()
+                else:
+                    msg = '? no such task found: %d' % int(current_task)
+                    windows[CLI_PANEL].set_text(msg)
+
             elif key == 'd':
                 task_name = dbs_task.task_canonical_name(current_task)
                 if task_name in ALL_TASKS:
@@ -1985,6 +1717,54 @@ def dbsui(stdscr):
                     response = windows[CLI_PANEL].get_response(msg)
                     if response == 'y' or response == 'Y':
                         mark_done(current_task)
+                    elif response == 'n' or response == 'N':
+                        pass
+                    elif not response:
+                        pass
+                    else:
+                        msg = '? enter y or n, not %s' % response
+                        windows[CLI_PANEL].set_text(msg)
+
+                    current_project = ''
+                    current_task = ''
+                    build_task_info()
+                    windows[PROJ_PANEL].populate()
+                    windows[TASK_PANEL].populate()
+                else:
+                    msg = '? no such task found: %d' % int(current_task)
+                    windows[CLI_PANEL].set_text(msg)
+
+            elif key == 'D':
+                task_name = dbs_task.task_canonical_name(current_task)
+                if task_name in ALL_TASKS:
+                    msg = 'Delete %d (y/[n])? ' % int(current_task)
+                    response = windows[CLI_PANEL].get_response(msg)
+                    if response == 'y' or response == 'Y':
+                        mark_deleted(current_task)
+                    elif response == 'n' or response == 'N':
+                        pass
+                    elif not response:
+                        pass
+                    else:
+                        msg = '? enter y or n, not %s' % response
+                        windows[CLI_PANEL].set_text(msg)
+
+                    current_project = ''
+                    current_task = ''
+                    build_task_info()
+                    windows[PROJ_PANEL].populate()
+                    windows[TASK_PANEL].populate()
+                else:
+                    msg = '? no such task found: %d' % int(current_task)
+                    windows[CLI_PANEL].set_text(msg)
+
+            elif key == '-':
+                task_name = dbs_task.task_canonical_name(current_task)
+                if task_name in ALL_TASKS:
+                    msg = 'Move %d priority down (y/[n])? ' % int(current_task)
+                    response = windows[CLI_PANEL].get_response(msg)
+                    if response == 'y' or response == 'Y':
+                        mark_lower(current_task)
                     elif response == 'n' or response == 'N':
                         pass
                     elif not response:
@@ -2017,6 +1797,30 @@ def dbsui(stdscr):
                         windows[PROJ_PANEL].populate()
                         windows[TASK_PANEL].populate()
                         response = ''
+                else:
+                    msg = '? no such task found: %d' % int(current_task)
+                    windows[CLI_PANEL].set_text(msg)
+
+            elif key == 'I':
+                task_name = dbs_task.task_canonical_name(current_task)
+                if task_name in ALL_TASKS:
+                    msg = 'Mark %d inactive (y/[n])? ' % int(current_task)
+                    response = windows[CLI_PANEL].get_response(msg)
+                    if response == 'y' or response == 'Y':
+                        mark_inactive(current_task)
+                    elif response == 'n' or response == 'N':
+                        pass
+                    elif not response:
+                        pass
+                    else:
+                        msg = '? enter y or n, not %s' % response
+                        windows[CLI_PANEL].set_text(msg)
+
+                    current_project = ''
+                    current_task = ''
+                    build_task_info()
+                    windows[PROJ_PANEL].populate()
+                    windows[TASK_PANEL].populate()
                 else:
                     msg = '? no such task found: %d' % int(current_task)
                     windows[CLI_PANEL].set_text(msg)
@@ -2087,6 +1891,54 @@ def dbsui(stdscr):
                     state = 10
                 else:
                     msg = '? no task content found'
+                    windows[CLI_PANEL].set_text(msg)
+
+            elif key == '+':
+                task_name = dbs_task.task_canonical_name(current_task)
+                if task_name in ALL_TASKS:
+                    msg = 'Move %d priority up (y/[n])? ' % int(current_task)
+                    response = windows[CLI_PANEL].get_response(msg)
+                    if response == 'y' or response == 'Y':
+                        mark_higher(current_task)
+                    elif response == 'n' or response == 'N':
+                        pass
+                    elif not response:
+                        pass
+                    else:
+                        msg = '? enter y or n, not %s' % response
+                        windows[CLI_PANEL].set_text(msg)
+
+                    current_project = ''
+                    current_task = ''
+                    build_task_info()
+                    windows[PROJ_PANEL].populate()
+                    windows[TASK_PANEL].populate()
+                else:
+                    msg = '? no such task found: %d' % int(current_task)
+                    windows[CLI_PANEL].set_text(msg)
+
+            elif key == '-':
+                task_name = dbs_task.task_canonical_name(current_task)
+                if task_name in ALL_TASKS:
+                    msg = 'Move %d priority down (y/[n])? ' % int(current_task)
+                    response = windows[CLI_PANEL].get_response(msg)
+                    if response == 'y' or response == 'Y':
+                        mark_lower(current_task)
+                    elif response == 'n' or response == 'N':
+                        pass
+                    elif not response:
+                        pass
+                    else:
+                        msg = '? enter y or n, not %s' % response
+                        windows[CLI_PANEL].set_text(msg)
+
+                    current_project = ''
+                    current_task = ''
+                    build_task_info()
+                    windows[PROJ_PANEL].populate()
+                    windows[TASK_PANEL].populate()
+                else:
+                    msg = '? no such task found: %d' % int(current_task)
                     windows[CLI_PANEL].set_text(msg)
 
             elif key == 'v':
