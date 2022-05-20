@@ -3,9 +3,9 @@ dbs == dain-bread simple
 TODO list for minimalists
 
 # SPDX-License-Identifier: GPL-2.0-only
-# Copyright (c) 2021, Al Stone <ahs3@ahs3.net>
+# Copyright (c) 2022, Al Stone <ahs3@ahs3.net>
 
-A "task" consists of a file that looks like this:
+A "task" consists of a file that looks something like this:
 
     Task: get something done
     State: open
@@ -28,14 +28,14 @@ distribute with.
 
 Installation is simple: clone the source tree, cd to the clone, then:
 
-   $ sudo cp dbs /usr/local/bin
+   $ make install
 
 Or:
 
-   $ cp dbs ~/bin
+   $ pip install dbs-todo
 
-That's it [2].  Python3 is the only requirement.  Most distros will have 
-the right Python modules by default.  I use this on Fedora and Debian, so
+That's it.  Python3 is the only requirement.  Most distros will have the
+right Python modules by default.  I use this on Fedora and Debian, so
 your mileage may vary.
 
 To add a task like the one above:
@@ -56,16 +56,28 @@ If you do this:
 
 You'll get a list of all current commands and any parameters they might need.
 
-A directory called (cleverly) ~/.dbs will be created.  There is a dbsrc config
-file in there that's not really used yet.  There is a directory for each task
+There is a config file: it is always $HOME/.config/dbs/config. The only thing
+you can specify is this:
+
+    repo: <some directory path>
+
+If it does not exist, it will be created.  If the repo path does not exist,
+it will be created, also.  In the repo, there is a directory for each task
 state containing one file for each task in that state.  Task names must be
-unique across all states since we move the files around in the various ~/.dbs
+unique across all states since we move the files around in the various repo
 directories [1].
+
+With 0.6.0, I've added an ncurses-based UI.  It's crude, probably buggy
+even.  It can be invoked with:
+
+   $ dbsui
+
+There is a 'help' command ('?').  The left panel lists the projects that
+have open tasks, and the right panel lists the tasks for the current
+project.  This is still experimental code so caveat emptor.
 
 
 Notes:
 [0] Nothing ever gets actually deleted unless you remove the files.
-[1] In order to sync across machines, I create ~/.dbs and then use
-    syncthing to sync that directory across machines.
-[2] You could rename the script if you like; I don't think there's anything
-    in the script that would preclude it.
+[1] In order to sync across machines, I create ~/Dropbox/dbs and use
+    Dropbox to sync that directory across machines.
