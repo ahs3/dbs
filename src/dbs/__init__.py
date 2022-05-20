@@ -259,11 +259,12 @@ def init_help():
     return "create initial dbs repository for tasks"
 
 def do_init(params):
-    if not os.path.isdir(dbs_repo()):
-        dbs_make_repo()
-    
     if not os.path.isfile(dbs_config_name()):
         dbs_defconfig()
+    dbs_read_config()
+    
+    if not os.path.isdir(dbs_repo()):
+        dbs_make_repo()
     
     if not dbs_data_dirs_exist():
         dbs_make_data_dirs()

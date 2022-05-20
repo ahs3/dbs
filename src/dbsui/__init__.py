@@ -2242,11 +2242,12 @@ def dbsui_main():
     global DBG
 
     #-- create the "data base"
-    if not os.path.isdir(dbs_task.dbs_repo()):
-        dbs_task.dbs_make_repo()
-
     if not os.path.isfile(dbs_task.dbs_config_name()):
         dbs_task.dbs_defconfig()
+    dbs_task.dbs_read_config()
+
+    if not os.path.isdir(dbs_task.dbs_repo()):
+        dbs_task.dbs_make_repo()
 
     if not dbs_task.dbs_data_dirs_exist():
         dbs_task.dbs_make_data_dirs()

@@ -24,7 +24,9 @@ import time
 VERSION = "0.5.0"
 YEAR = "2022"
 AUTHOR = "Al Stone <ahs3@ahs3.net>"
-CONFIG = "dbsrc"
+CONFIG = "config"
+CONFIG_VALUES = {}
+REPO = "repo"
 ACTIVE = "active"
 OPEN = "open"
 DONE = "done"
@@ -33,12 +35,16 @@ ALLOWED_STATES = [ACTIVE, OPEN, DONE, DELETED]
 DAYS_LIMIT = 60
 LASTNUM = "lastnum"
 
+#-- task fields
 RE_NAME = re.compile('^Name:')
 RE_TASK = re.compile('^Task:')
 RE_STATE = re.compile('^State:')
 RE_PROJECT = re.compile('^Project:')
 RE_PRIORITY = re.compile('^Priority:')
 RE_NOTE = re.compile('^Note:')
+
+#-- config field
+RE_REPO = re.compile('^repo:')
 
 HIGH = 'h'
 MEDIUM = 'm'
@@ -279,10 +285,15 @@ class Task:
 
 #-- helper functions
 def dbs_repo():
-    return os.path.join(os.getenv("HOME"), ".dbs")
+    global CONFIG_VALUES
+
+    if CONFIG_VALUES[REPO]:
+        return CONFIG_VALUES[REPO]
+    else:
+        return os.path.join(os.getenv("HOME"), '.config', 'dbs')
 
 def dbs_config_name():
-    return os.path.join(dbs_repo(), CONFIG)
+    return os.path.join(os.getenv("HOME"), '.config', 'dbs', CONFIG)
 
 def dbs_open_name():
     return os.path.join(dbs_repo(), OPEN)
@@ -310,6 +321,19 @@ def dbs_defconfig():
     fd.close()
     return
 
+def dbs_read_config():
+    global CONFIG_VALUES
+
+    fname = dbs_config_name()
+    fd = open(fname, "r")
+    for ii in fd.readlines():
+        line = ii.strip()
+        if RE_REPO.search(line):
+            fields = line.split(':')
+            CONFIG_VALUES[REPO] = fields[1].strip()
+    fd.close()
+    return
+
 def dbs_make_data_dirs():
     if not os.path.isdir(dbs_open_name()):
         os.mkdir(dbs_open_name())
@@ -325,7 +349,6 @@ def dbs_make_repo():
     print("dbs repo not found, creating defaults in %s" % dbs_repo())
     os.mkdir(dbs_repo())
     dbs_make_data_dirs()
-    dbs_defconfig()
     return
 
 def dbs_next():

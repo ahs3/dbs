@@ -8,6 +8,8 @@ v0.5.0:
 -- Task "names" really need to be numbers now; can use a value (e.g., '4')
    vs the filename ('0004') on all commands
 -- Allow for up to eight digits in the task "name" (aka number)
+-- The config file is now always $HOME/.config/dbs/config.  It only allows
+   for a repo location for now.
 -- UI
    -- Added an ncurses UI (dbsui) on top of CLI (dbs)
    -- Once a task has been edited, make sure it's legit then update it
