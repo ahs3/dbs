@@ -1,7 +1,9 @@
 TODO:
 =====
--- marking last task in a project done crashes in get_current_task_list:1266
--- marking task done and id already exists dies silently
+-- UI
+   -- marking last task in a project done crashes in get_current_task_list:1266
+   -- marking task done and id already exists dies silently
+   -- init db structure if it doesn't exist at start-up
 -- Update README (inaccurate now)
 -- add recurring tasks
 -- do i want to be able to have tags, a la taskwarrior?  not sure
