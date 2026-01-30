@@ -21,8 +21,8 @@ import tempfile
 import time
 
 #-- globals
-VERSION = "0.6.1"
-YEAR = "2022"
+VERSION = "0.6.2"
+YEAR = "2023"
 AUTHOR = "Al Stone <ahs3@ahs3.net>"
 CONFIG = "config"
 CONFIG_VALUES = {}

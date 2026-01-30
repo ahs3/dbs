@@ -1,5 +1,10 @@
 DONE:
 =====
+v0.6.2:
+-- UI
+   -- Fixed bug where deleting last task in a project would cause crashes
+   -- Fixed bug where marking task done and ID already exist dies silently
+
 v0.5.0:
 -- Moved the dbs task class to a separate module file
 -- Gave in and set up proper Python packaging; really changes to tree

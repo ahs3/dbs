@@ -525,6 +525,17 @@ class DbsTasks(DbsPanel):
 
         return
 
+    def remove_task(self, task_name):
+        global DBG
+
+        DBG.write('try to remove_task: "%s"' % task_name)
+        if not self.content:
+            return
+        else:
+            if task_name in self.content:
+                del self.content[task_name]
+                DBG.write('remove_task done: "%s"' % task_name)
+
 
 class DbsList(DbsPanel):
     def __init__(self, name, screen, content_cb):
@@ -758,10 +769,12 @@ def mark_active(raw_task):
     if tname in ALL_TASKS:
         t = ALL_TASKS[tname]
         fullpath = dbs_task.task_name_exists(tname)
+        old_state = t.get_state()
         t.set_state(ACTIVE)
         t.add_note("marked active")
-        t.move(ACTIVE)
-        os.remove(fullpath)
+        dbs_task.put_task(t)
+        if old_state != ACTIVE:
+            os.remove(fullpath)
     else:
         return ('? no such task: %d' % int(raw_task))
 
@@ -769,15 +782,18 @@ def mark_active(raw_task):
 
 def mark_deleted(raw_task):
     global ALL_TASKS
+    global current_task
 
     tname = dbs_task.task_canonical_name(raw_task)
     if tname in ALL_TASKS:
         t = ALL_TASKS[tname]
         fullpath = dbs_task.task_name_exists(tname)
+        old_state = t.get_state()
         t.set_state(DELETED)
         t.add_note("deleted")
-        t.move(DELETED)
-        os.remove(fullpath)
+        dbs_task.put_task(t)
+        if old_state != DELETED:
+            os.remove(fullpath)
     else:
         return ('? no such task: %d' % int(raw_task))
 
@@ -790,10 +806,12 @@ def mark_done(raw_task):
     if tname in ALL_TASKS:
         t = ALL_TASKS[tname]
         fullpath = dbs_task.task_name_exists(tname)
+        old_state = t.get_state()
         t.set_state(DONE)
         t.add_note("marked done")
-        t.move(DONE)
-        os.remove(fullpath)
+        dbs_task.put_task(t)
+        if old_state != DONE:
+            os.remove(fullpath)
     else:
         return ('? no such task: %d' % int(raw_task))
 
@@ -814,7 +832,7 @@ def mark_higher(raw_task):
             return ("? task \"%s\" already at '%s'" % (int(raw_task), HIGH))
         t.set_priority(pri)
         t.add_note("upped priority")
-        put_task(t)
+        dbs_task.put_task(t)
     else:
         return ('? no such task: %d' % int(raw_task))
 
@@ -827,10 +845,12 @@ def mark_inactive(raw_task):
     if tname in ALL_TASKS:
         t = ALL_TASKS[tname]
         fullpath = dbs_task.task_name_exists(tname)
+        old_path = t.get_state()
         t.set_state(OPEN)
-        t.add_note("marked open")
-        t.move(OPEN)
-        os.remove(fullpath)
+        t.add_note("marked inactive")
+        dbs_task.put_task(t)
+        if old_state != OPEN:
+            os.remove(fullpath)
     else:
         return ('? no such task: %d' % int(raw_task))
 
@@ -851,7 +871,7 @@ def mark_lower(raw_task):
             return ("? task \"%s\" already at '%s'" % (int(raw_task), HIGH))
         t.set_priority(pri)
         t.add_note("upped priority")
-        put_task(t)
+        dbs_task.put_task(t)
     else:
         return ('? no such task: %d' % int(raw_task))
 
@@ -1226,6 +1246,9 @@ def refresh_projects(screen, win, lines):
     global current_project
     global DBG
 
+    if not current_project:
+        current_project = ACTIVE_PROJECTS[0]
+
     maxy, maxx = win.getmaxyx()
     blanks = ''.ljust(maxx-1, ' ')
     linenum = 0
@@ -1251,33 +1274,42 @@ def refresh_projects(screen, win, lines):
 
     return
 
-def get_current_task_list(current_project):
+def get_current_task_list(project):
     global ACTIVE_PROJECTS, ALL_TASKS, ACTIVE_TASKS
-    global current_task
+    global current_task, current_project
     global DBG
 
-    DBG.write('get_current_task_list: ' + current_project)
+    DBG.write('get_current_task_list: ' + project)
     ACTIVE_TASKS.clear()
 
     if not ALL_TASKS or not ACTIVE_PROJECTS:
         return
 
+    if project not in ACTIVE_PROJECTS:
+        current_task = ''
+        current_project = ''
+        return
+
     task_list = []
-    task_list = ACTIVE_PROJECTS[current_project][HIGH] + \
-                ACTIVE_PROJECTS[current_project][MEDIUM] + \
-                ACTIVE_PROJECTS[current_project][LOW]
+    task_list = ACTIVE_PROJECTS[project][HIGH] + \
+                ACTIVE_PROJECTS[project][MEDIUM] + \
+                ACTIVE_PROJECTS[project][LOW]
     for ii in task_list:
         t = ALL_TASKS[ii.get_name()]
-        if t.get_name() not in ACTIVE_TASKS:
+        if t.get_name() not in ACTIVE_TASKS and t.get_state() != DELETED:
             ACTIVE_TASKS[t.get_name()] = ii
 
     tlist = sorted(ACTIVE_TASKS.keys())
-    current_task = tlist[0]
+    if len(tlist) > 0:
+        current_task = tlist[0]
 
     return tlist
 
 def refresh_tasks(screen, win, lines):
     global ACTIVE_TASKS, current_task
+
+    if not current_task:
+        return
 
     maxy, maxx = win.getmaxyx()
     blanks = ''.ljust(maxx-1, ' ')
@@ -1291,8 +1323,9 @@ def refresh_tasks(screen, win, lines):
             attrs = BOLD_RED_ON_BLACK
         elif pri == MEDIUM:
             attrs = BOLD_GREEN_ON_BLACK
-        if ACTIVE_TASKS[tname].get_state() == ACTIVE:
-            attrs = BOLD_WHITE_ON_BLUE
+        if tname in ACTIVE_TASKS:
+            if ACTIVE_TASKS[tname].get_state() == ACTIVE:
+                attrs = BOLD_WHITE_ON_BLUE
         if tname == current_task:
             attrs = BOLD_WHITE_ON_RED
         txt = "%8d  %4s  %1s  %s" % (int(info[0]), info[1], info[2], info[3])
@@ -1588,11 +1621,7 @@ def edit_task(raw_name):
             old_state = t.get_state()
             t.set_fields(after_edit)
             t.add_note('edited')
-            if t.get_state() != old_state:
-                t.move(t.get_state())
-                dbs_task.put_task(t, True)
-            else:
-                dbs_task.put_task(t, True)
+            dbs_task.put_task(t, True)
 
     DBG.write('edit_task: %s (was, now) = %d, %d [%s]' %
               (task_name, len(before_edit), len(after_edit), ret))
@@ -1727,7 +1756,7 @@ def dbsui(stdscr):
                 tname = dbs_task.task_canonical_name(raw_task)
                 response = add_task(tname)
                 if not response:
-                    current_taks = tname
+                    current_task = tname
                     build_task_info()
                     windows[PROJ_PANEL].populate()
                     windows[TASK_PANEL].populate()
